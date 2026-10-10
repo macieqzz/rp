@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatBackend } from './chatBackend'
 import type { GenerateRequest } from './types'
-import { ASSIST_TIMEOUT_MS, generateWithTimeout } from './generateWithTimeout'
+import { ASSIST_TIMEOUT_MS, generateWithTimeout, trimCodeFence } from './generateWithTimeout'
 import { getInstructTemplate } from '../prompt/instructTemplates'
 
 describe('generateWithTimeout', () => {
@@ -102,7 +102,8 @@ describe('generateWithTimeout prompt shaping', () => {
       { template: gemma },
     )
     expect(sent().prompt).toBe('<start_of_turn>user\nJSON:<end_of_turn>\n<start_of_turn>model\n')
-    expect(sent().stop_sequence).toEqual(['```', '<end_of_turn>', '<start_of_turn>'])
+    // The fence stop is dropped (cut afterwards instead); only the template's own stops go to the server.
+    expect(sent().stop_sequence).toEqual(['<end_of_turn>', '<start_of_turn>'])
   })
 
   it('is a no-op for plain-chat (beyond the trailing newline), same as omitting a template', async () => {
@@ -150,5 +151,27 @@ describe('generateWithTimeout prompt shaping', () => {
       reasoningReserve: 0,
     })
     expect(sent().max_length).toBe(200)
+  })
+})
+
+describe('fenced answers', () => {
+  const clientReturning = (text: string, spy?: (p: GenerateRequest) => void) =>
+    ({ generate: async (p: GenerateRequest) => (spy?.(p), text) }) as unknown as ChatBackend
+
+  it('keeps the JSON of an answer that opens with a code fence instead of returning nothing', async () => {
+    let stops: string[] | undefined
+    const out = await generateWithTimeout(
+      clientReturning('```json\n{"a":1}\n```\nSome trailing remark.', (p) => (stops = p.stop_sequence)),
+      { prompt: 'JSON:', max_length: 50, stop_sequence: ['\n\n\n', '```'] } as GenerateRequest,
+      'Test call',
+    )
+    expect(out).toBe('{"a":1}\n')
+    expect(stops).toEqual(['\n\n\n'])
+  })
+
+  it('trimCodeFence cuts a bare answer at the first fence and leaves fence-free text alone', () => {
+    expect(trimCodeFence('{"a":1}\n```\nnotes')).toBe('{"a":1}\n')
+    expect(trimCodeFence('plain text')).toBe('plain text')
+    expect(trimCodeFence('```\n[1,2]\n```')).toBe('[1,2]\n')
   })
 })

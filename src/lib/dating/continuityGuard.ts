@@ -160,5 +160,5 @@ export function detectContinuityBreak(
 
 /** One-line summary of a break, for the toast and the retry's correction directive. */
 export function describeContinuityBreak(breakFound: ContinuityBreak): string {
-  return `"${breakFound.quote}" contradicts the scene — ${breakFound.expected}`
+  return `"${breakFound.quote}" contradicts the scene, ${breakFound.expected}`
 }

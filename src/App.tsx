@@ -20,6 +20,7 @@ import { chatsApi } from '@/lib/api/client'
 import { useApplyTheme } from '@/lib/hooks/useApplyTheme'
 import { useOutreachTick } from '@/lib/hooks/useOutreachTick'
 import { useAutoContextLength } from '@/lib/hooks/useAutoContextLength'
+import { useAutoInstructTemplate } from '@/lib/hooks/useAutoInstructTemplate'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 
 /** The chat tab: the full-screen Welcome screen on a fresh install, otherwise the panel + window. */
@@ -72,6 +73,7 @@ export default function App() {
   useApplyTheme()
   useOutreachTick()
   useAutoContextLength()
+  useAutoInstructTemplate()
   const [view, setView] = useState<ViewId>('chat')
   const activeChatId = useSettingsStore((s) => s.activeChatId)
   const setActiveChatId = useSettingsStore((s) => s.setActiveChatId)

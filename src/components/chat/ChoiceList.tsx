@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Gift, MessageSquare, RotateCcw, Zap, type LucideIcon } from 'lucide-react'
 import type { ChoiceOption } from '@/lib/types'
 
@@ -27,6 +28,22 @@ const GIFT_NAME_CLASSES = { default: 'text-text-muted', vn: 'text-white/60' }
 
 /** The "what happens next" prompt shown once a reply lands — picking one sends it and moves the scene forward. Wrapped pill chips rather than stacked full-width rows, so a set of 3 doesn't cost three lines of vertical space. */
 export function ChoiceList({ choices, onPick, onRefresh, refreshing, variant = 'default' }: ChoiceListProps) {
+  // Number keys pick a choice while no field has focus (the VN stage binds its own set).
+  useEffect(() => {
+    if (variant !== 'default') return
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const n = Number(e.key)
+      if (!Number.isInteger(n) || n < 1 || n > choices.length) return
+      e.preventDefault()
+      onPick(choices[n - 1])
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [choices, onPick, variant])
+
   return (
     <div
       className={`flex w-full items-center gap-2 ${
@@ -45,6 +62,9 @@ export function ChoiceList({ choices, onPick, onRefresh, refreshing, variant = '
             onClick={() => onPick(choice)}
             className={`flex shrink-0 items-center gap-2 rounded-full py-1.5 pl-3 pr-3.5 text-left text-sm transition-colors ${CHIP_CLASSES[variant]}`}
           >
+            {variant === 'default' && i < 9 && (
+              <kbd className="shrink-0 rounded bg-bg-sunken px-1 font-mono text-[10px] text-text-muted">{i + 1}</kbd>
+            )}
             <KindIcon size={13} strokeWidth={2} className={`shrink-0 ${KIND_ICON_CLASSES[variant]}`} />
             {choice.label}
             {choice.kind === 'gift' && choice.giftName && (

@@ -58,7 +58,7 @@ function clothingLines(facts: SceneStateFacts): string {
   for (const participant of facts.participants ?? []) {
     if (participant.clothing?.char?.length) sides.push(`${participant.name}: ${describeClothingSide(participant.clothing, 'char')}`)
   }
-  return sides.length ? `Clothing — ${sides.join('. ')}.` : ''
+  return sides.length ? `Clothing now. ${sides.join('. ')}.` : ''
 }
 
 /** Every tracked character's band on one line. Asymmetry is the point: one at the edge while another is warming is a scene beat. */

@@ -10,7 +10,7 @@
  */
 export function buildSteerDirective(steerText: string, charName: string): string {
   const trimmed = steerText.trim()
-  return `Before writing this reply again: the previous attempt went the wrong way, and the player has stepped in to correct it. This overrides any instinct to continue what the last attempt was doing. Write this turn as if that attempt had never happened — don't carry its direction forward, don't have ${charName} walk it back on the page, and don't acknowledge the correction inside the fiction. Just write the turn it should have been. The correction: ${trimmed}`
+  return `Before writing this reply again: the previous attempt went the wrong way, and the player has stepped in to correct it. This overrides any instinct to continue what the last attempt was doing. Write this turn as if that attempt had never happened, don't carry its direction forward, don't have ${charName} walk it back on the page, and don't acknowledge the correction inside the fiction. Just write the turn it should have been. The correction: ${trimmed}`
 }
 
 /** Same one-shot directive, auto-built from a hard-rail hit (a boundary cross, an agency violation, and/or a

@@ -118,9 +118,25 @@ const EXCESS_BLANKS_RE = /\n{3,}/g
  * through to `normalizeRpMarkup`, which still strips the bare `<think>` marker itself but leaves
  * the reasoning prose after it as visible (if odd-looking) text rather than deleting it unseen.
  */
-const THINK_BLOCK_RE = /<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi
+const THINK_BLOCK_RE = /<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>|<\|channel>[\s\S]*?<channel\|>/gi
+
+/** Removes closed reasoning blocks (`<think>…</think>` and Gemma 4's `<|channel>thought …<channel|>`) from a completed generation. */
+export function stripThinkBlocks(text: string): string {
+  return text.replace(THINK_BLOCK_RE, '').trimStart()
+}
+
+/** Swaps em dashes for punctuation that reads naturally: an interrupted or trailing line becomes an ellipsis, anything else a comma. */
+export function replaceEmDashes(text: string): string {
+  return text
+    .replace(/[ \t]*[\u2014\u2015][ \t]*(?=["\u201d'\u2019*)\]]|\n|$)/g, '...')
+    .replace(/[ \t]*[\u2014\u2015][ \t]*/g, ', ')
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s*([.!?])/g, '$1')
+}
 
 export interface CleanModelOutputOptions {
+  /** Replace em dashes with commas/ellipses (see `replaceEmDashes`). */
+  replaceEmDashes?: boolean
   /** The speaking character's name, to strip an echoed `Name:` prefix the prompt's own generation cue invited. */
   charName?: string
   /** The player's persona name, to cut the reply short if the model started writing their turn too. */
@@ -266,6 +282,7 @@ export function cleanModelOutput(text: string, opts: CleanModelOutputOptions = {
 
   out = out.replace(MD_HEADING_RE, '')
   out = out.replace(EXCESS_BLANKS_RE, '\n\n')
+  if (opts.replaceEmDashes) out = replaceEmDashes(out)
 
   // A lone trailing asterisk with no partner is a half-written action beat, not emphasis.
   const stars = (out.match(/\*/g) ?? []).length

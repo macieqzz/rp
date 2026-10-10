@@ -101,3 +101,28 @@ describe('buildFactsLorebook', () => {
     )
   })
 })
+
+describe('buildFactsLorebook relevance', () => {
+  const kept = (book: { entries: { content: string }[] }[]) => book[0].entries.map((e) => e.content)
+
+  it('marks fact entries volatile so cache-friendly prompts place them after the history', () => {
+    const [book] = buildFactsLorebook([fact({ text: 'Likes tea.', createdAt: 1 })])
+    expect(book.entries[0].volatile).toBe(true)
+  })
+
+  it('ranks a fact the conversation is touching on above an equally old unrelated one', () => {
+    const facts = [
+      fact({ text: 'Her sister Mika lives in Osaka.', createdAt: 1 }),
+      fact({ text: 'Prefers window seats on trains.', createdAt: 2 }),
+    ]
+    const withoutContext = kept(buildFactsLorebook(facts, 200))
+    expect(withoutContext[withoutContext.length - 1]).toBe('Prefers window seats on trains.')
+    const withContext = kept(buildFactsLorebook(facts, 200, 'Have you heard from Mika lately? Osaka must be lovely.'))
+    expect(withContext[withContext.length - 1]).toBe('Her sister Mika lives in Osaka.')
+  })
+
+  it('an empty context leaves the ordering exactly as before', () => {
+    const facts = [fact({ text: 'a one', createdAt: 1 }), fact({ text: 'b two', createdAt: 2 })]
+    expect(kept(buildFactsLorebook(facts, 200, ''))).toEqual(kept(buildFactsLorebook(facts, 200)))
+  })
+})

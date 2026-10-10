@@ -49,8 +49,12 @@ describe('detectInstructTemplateId', () => {
     expect(detectInstructTemplateId('{{ bos_token }}{% for message in messages %}{{ "<start_of_turn>" + role }}')).toBe('gemma')
   })
 
-  it('reads Gemma from the real KoboldCpp /props comment header', () => {
-    expect(detectInstructTemplateId('{#\n  Template: Google Gemma 4 Canonical Chat Template\n#}\n{%- macro ...')).toBe('gemma')
+  it('reads Gemma 4 from the real KoboldCpp /props comment header', () => {
+    expect(detectInstructTemplateId('{#\n  Template: Google Gemma 4 Canonical Chat Template\n#}\n{%- macro ...')).toBe('gemma4')
+  })
+
+  it('reads Gemma 4 from its <|turn> markers, ahead of the older Gemma check', () => {
+    expect(detectInstructTemplateId("{{- bos_token -}}{{- '<|turn>system\n' -}}{{- '<turn|>\n' -}}")).toBe('gemma4')
   })
 
   it('reads ChatML, Llama 3, Mistral, Alpaca, Vicuna', () => {
@@ -80,6 +84,11 @@ describe('wrapAssistPrompt', () => {
     const gemma = getInstructTemplate('gemma')
     const wrapped = wrapAssistPrompt('Return ONLY JSON.\n\nJSON:', gemma)
     expect(wrapped).toBe('<start_of_turn>user\nReturn ONLY JSON.\n\nJSON:<end_of_turn>\n<start_of_turn>model\n')
+  })
+
+  it('wraps for Gemma 4 with its empty thought channel already closed, so the model skips straight to the answer', () => {
+    const wrapped = wrapAssistPrompt('Return ONLY JSON.', getInstructTemplate('gemma4'))
+    expect(wrapped).toBe('<|turn>system\nReturn ONLY JSON.<turn|>\n<|turn>model\n<|channel>thought\n<channel|>')
   })
 
   it('is a no-op (beyond a trailing newline) for plain-chat, same as the main reply path', () => {

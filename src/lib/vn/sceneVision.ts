@@ -256,7 +256,7 @@ export async function detectExpressionTextMismatch(
     `${params.charName} was just tagged with the expression "${tagged}" after writing this line:`,
     `"""\n${reply}\n"""`,
     `Available expression ids:\n${roster}`,
-    `Only pick a different id when the text is a CLEAR, obvious mismatch — it plainly shows a different emotion than "${tagged}" (tagged "blush" but the line is openly furious, say). A subtle, ambiguous, or merely-imperfect fit is NOT a mismatch: repeat "${tagged}" itself in that case.`,
+    `Only pick a different id when the text is a CLEAR, obvious mismatch, it plainly shows a different emotion than "${tagged}" (tagged "blush" but the line is openly furious, say). A subtle, ambiguous, or merely-imperfect fit is NOT a mismatch: repeat "${tagged}" itself in that case.`,
     'Return ONLY a minified JSON object naming the expression id that actually fits: {"expression":"<id>"}.',
     'JSON:',
   ].join('\n')
@@ -300,7 +300,7 @@ export async function detectGreetingScene(
       ? `Available expression ids: ${params.expressionIds.join(', ')}. Pick whichever best matches the character's face/mood at the start of this scene.`
       : '',
     allowedBg.size
-      ? `Available background ids: ${params.backgroundIds.join(', ')}. Pick the closest reasonable fit for where this scene is set, even if imperfect — e.g. a library is closest to "classroom" or "school-hallway", a car interior to "city-street". Only use "" if the setting is genuinely unclear or nothing on the list is even loosely plausible.`
+      ? `Available background ids: ${params.backgroundIds.join(', ')}. Pick the closest reasonable fit for where this scene is set, even if imperfect, e.g. a library is closest to "classroom" or "school-hallway", a car interior to "city-street". Only use "" if the setting is genuinely unclear or nothing on the list is even loosely plausible.`
       : '',
     'Return ONLY a minified JSON object: {"expression":"<id or empty>","background":"<id or empty>"}. Use "" for whichever you cannot confidently place.',
     'JSON:',

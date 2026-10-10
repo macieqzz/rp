@@ -34,7 +34,7 @@ export function isRebuffActive(rebuff: RecentRebuff | undefined | null, charRepl
 export function rebuffGuidance(charName: string, userName: string, rebuff: RecentRebuff): string {
   const askKind = rebuff.kind === 'commitment' ? 'define where things actually stood' : 'take things further, physically'
   if (rebuff.severity === 'backfire') {
-    return `Not long ago ${userName} pushed to ${askKind} and it genuinely stung ${charName} — bad timing, or it read as presumptuous. That doesn't heal in one warm line: ${charName} can be slower to open back up or a little more guarded than usual for a while, without it becoming a punishment that never lifts.`
+    return `Not long ago ${userName} pushed to ${askKind} and it genuinely stung ${charName}, bad timing, or it read as presumptuous. That doesn't heal in one warm line: ${charName} can be slower to open back up or a little more guarded than usual for a while, without it becoming a punishment that never lifts.`
   }
   return `${userName} recently asked to ${askKind} and ${charName} put it off. That isn't forgotten the instant the subject changes: a touch more self-protection or hesitation than usual is natural for a little while, even while things otherwise carry on normally.`
 }

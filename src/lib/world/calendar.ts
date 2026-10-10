@@ -191,7 +191,7 @@ export function describeWorldMoment(opts: {
   const phase = PHASES[Math.max(0, Math.min(PHASES.length - 1, opts.phaseIndex))]
   const weather = getWeather(opts.worldId, opts.day)
   const mood = getMoodOfDay(opts.characterId, opts.day)
-  const holidayNote = info.holiday ? ` — today is ${info.holiday}` : ''
+  const holidayNote = info.holiday ? `, today is ${info.holiday}` : ''
   const weatherNote = opts.weatherPreferences?.loves?.includes(weather)
     ? ' (a kind of weather {{char}} loves)'
     : opts.weatherPreferences?.hates?.includes(weather)

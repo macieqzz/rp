@@ -294,12 +294,12 @@ export function validateScenarioGraph(graph: ScenarioGraph): string[] {
   }
 
   for (const stage of graph.stages) {
-    if (!stage.edges.length) problems.push(`stage "${stage.id}" is a dead end — it has no exit edges`)
+    if (!stage.edges.length) problems.push(`stage "${stage.id}" is a dead end, it has no exit edges`)
     // One option is not a decision, so `buildPendingChoice` never raises a lone choice edge. A stage
     // with no auto edge and exactly one choice edge therefore has no way out at all at runtime, which
     // reads as a valid graph on paper and traps a live scene.
     if (!stage.edges.some((edge) => edge.mode === 'auto') && stage.edges.filter((edge) => edge.mode === 'choice').length === 1) {
-      problems.push(`stage "${stage.id}" can never be left — a single choice edge is not a decision, so it is never offered`)
+      problems.push(`stage "${stage.id}" can never be left, a single choice edge is not a decision, so it is never offered`)
     }
     for (const edge of stage.edges) {
       if (edge.to !== RESOLVE_STAGE && !ids.has(edge.to)) problems.push(`stage "${stage.id}" has an edge to unknown stage "${edge.to}"`)
@@ -332,7 +332,7 @@ export function validateScenarioGraph(graph: ScenarioGraph): string[] {
   }
   // A graph with no way out would hold a scene open forever.
   if (!graph.stages.some((stage) => stage.edges.some((edge) => edge.to === RESOLVE_STAGE))) {
-    problems.push('no stage can resolve the scene — the graph has no edge to "resolve"')
+    problems.push('no stage can resolve the scene, the graph has no edge to "resolve"')
   }
   return problems
 }

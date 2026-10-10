@@ -127,19 +127,19 @@ export function selectAmbientEvent(ctx: AmbientEventContext): AmbientEvent | und
 
 const HOOK_LINES: Record<AmbientEventKind, (charName: string, event: AmbientEvent) => string> = {
   holiday: (charName, event) =>
-    `Today is ${event.detail} — a real, recognized occasion in this world. It doesn't have to take over the scene, but it's a fair, specific thing for ${charName} to notice, mention, or feel some way about today.`,
+    `Today is ${event.detail}, a real, recognized occasion in this world. It doesn't have to take over the scene, but it's a fair, specific thing for ${charName} to notice, mention, or feel some way about today.`,
   birthday: (charName) =>
-    `Today is ${charName}'s actual birthday — a real, once-a-year occasion for them personally, not just a world holiday. It doesn't have to take over the scene, but it's fair and natural for ${charName} to notice it, feel some way about it (however they'd genuinely feel about their own birthday), or bring it up themselves today.`,
+    `Today is ${charName}'s actual birthday, a real, once-a-year occasion for them personally, not just a world holiday. It doesn't have to take over the scene, but it's fair and natural for ${charName} to notice it, feel some way about it (however they'd genuinely feel about their own birthday), or bring it up themselves today.`,
   birthday_soon: (charName, event) =>
-    `${charName}'s birthday is coming up in about ${event.daysUntil} day${event.daysUntil === 1 ? '' : 's'} — close enough that it's fair for ${charName} to naturally mention it's coming, drop a hint about wanting something, or seem a little more aware of the date than usual. Not something to force.`,
+    `${charName}'s birthday is coming up in about ${event.daysUntil} day${event.daysUntil === 1 ? '' : 's'}, close enough that it's fair for ${charName} to naturally mention it's coming, drop a hint about wanting something, or seem a little more aware of the date than usual. Not something to force.`,
   weather_loved: (charName, event) =>
     `Today's weather (${event.detail}) happens to be exactly the kind ${charName} genuinely loves. Worth ${charName} noticing or reacting to today, in whatever small way actually fits their mood right now.`,
   weather_hated: (charName, event) =>
-    `Today's weather (${event.detail}) happens to be exactly the kind ${charName} genuinely dislikes. It can reasonably color their mood today — a little friction, a complaint, wishing they were elsewhere — without becoming a bigger deal than it is.`,
+    `Today's weather (${event.detail}) happens to be exactly the kind ${charName} genuinely dislikes. It can reasonably color their mood today, a little friction, a complaint, wishing they were elsewhere, without becoming a bigger deal than it is.`,
   routine_absence: (charName, event) =>
-    `${charName} hasn't been to ${event.detail}, one of their own regular spots, in about ${event.daysSinceVisited ?? 'quite a few'} days now. A small, real gap in their routine that could plausibly cross their mind or come up today — not something to force into the scene.`,
+    `${charName} hasn't been to ${event.detail}, one of their own regular spots, in about ${event.daysSinceVisited ?? 'quite a few'} days now. A small, real gap in their routine that could plausibly cross their mind or come up today, not something to force into the scene.`,
   goal_on_mind: (charName, event) =>
-    `Something ${charName} has genuinely been working toward — ${event.detail} — is weighing on them more than usual today. It can surface as a passing thought, an offhand comment, or a bit of restlessness, without needing to be resolved this turn.`,
+    `Something ${charName} has genuinely been working toward, ${event.detail}, is weighing on them more than usual today. It can surface as a passing thought, an offhand comment, or a bit of restlessness, without needing to be resolved this turn.`,
   free_time_interest: (charName, event) =>
     `${charName} has no particular obligation pulling at them right now, and ${event.detail} is something they'd genuinely enjoy turning their attention to, if the scene naturally allows for it.`,
 }
@@ -204,7 +204,7 @@ export function scheduleConflictGuidance(
   const locationNote = presence.location ? ` at ${presence.location}` : ''
   const STAKES: Record<Exclude<PresenceStatus, 'available'>, string> = {
     busy: `is genuinely supposed to be busy right now${activityNote}${locationNote}, per their own routine. Starting a date, a deep unhurried moment, or escalating intimacy right this instant should read as a real, noticed cost, stepping away from something they're actually on the hook for, not a free action. ${charName} can still go along with it, but let some honest friction show (reluctance, a glance at the time, guilt, something they're now not doing) rather than the schedule silently not existing.`,
-    sleeping: `is supposed to be asleep right now, per their own routine. Being woken for a date or something intimate is a real disruption, not free — grogginess, a genuinely mixed reaction, or asking why this couldn't wait are all fair, honest responses instead of snapping instantly alert and ready.`,
+    sleeping: `is supposed to be asleep right now, per their own routine. Being woken for a date or something intimate is a real disruption, not free, grogginess, a genuinely mixed reaction, or asking why this couldn't wait are all fair, honest responses instead of snapping instantly alert and ready.`,
     traveling: `is currently traveling${locationNote}, not settled somewhere a real date or a deep, unhurried scene can comfortably start. That's a real physical constraint on how this moment can play out right now, not just flavor text to ignore.`,
   }
   return `${charName} ${STAKES[presence.status]}`
@@ -212,5 +212,5 @@ export function scheduleConflictGuidance(
 
 /** Formats a selected reaction as a durable memory line (meant to be persisted as a `ChatFact`), framed as reported/relayed rather than the connection actually appearing in scene. */
 export function describeSocialReaction(charName: string, reaction: SocialReaction): string {
-  return `${reaction.connectionName} (${charName}'s ${reaction.relation}) heard about ${reaction.topic} and had something to say about it — ${charName} can bring this up in a later scene as a real secondhand mention (something ${reaction.connectionName} said, texted, or was overheard saying), relayed in ${charName}'s own words, not as ${reaction.connectionName} literally appearing.`
+  return `${reaction.connectionName} (${charName}'s ${reaction.relation}) heard about ${reaction.topic} and had something to say about it, ${charName} can bring this up in a later scene as a real secondhand mention (something ${reaction.connectionName} said, texted, or was overheard saying), relayed in ${charName}'s own words, not as ${reaction.connectionName} literally appearing.`
 }

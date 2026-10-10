@@ -151,11 +151,11 @@ describe('validateScenarioSource', () => {
     expect(problems).toContain('missing id')
     expect(problems).toContain('missing title')
     expect(problems).toContain('missing entryStage')
-    expect(problems).toContain('unsupported version — expected 1')
+    expect(problems).toContain('unsupported version (expected 1)')
   })
 
   it('rejects a future version rather than loading it hopefully', () => {
-    expect(validateScenarioSource({ ...minimal(), version: 2 })).toContain('unsupported version — expected 1')
+    expect(validateScenarioSource({ ...minimal(), version: 2 })).toContain('unsupported version (expected 1)')
   })
 
   it('rejects malformed stages and edges before reading the graph rules', () => {

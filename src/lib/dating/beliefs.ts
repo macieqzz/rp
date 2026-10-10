@@ -88,5 +88,5 @@ export function beliefsGuidance(charName: string, userName: string, beliefs: Cha
   const active = beliefs ?? []
   if (active.length === 0) return ''
   const lines = active.map((b) => `- ${b.text}`).join('\n')
-  return `${charName} has formed some real impressions of ${userName} by now, not just a running warmth score:\n${lines}\nLet these quietly colour how ${charName} reads ${userName}'s actions and words — confirming one, or noticing it being contradicted, is more interesting than restating it outright.`
+  return `${charName} has formed some real impressions of ${userName} by now, not just a running warmth score:\n${lines}\nLet these quietly colour how ${charName} reads ${userName}'s actions and words, confirming one, or noticing it being contradicted, is more interesting than restating it outright.`
 }

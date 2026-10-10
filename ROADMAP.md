@@ -115,6 +115,113 @@ stores everything as JSON blobs, most new fields need no migrations — just ext
       it safe rather than a bug, but a nudge toward "closest is better than none" got it picking
       confidently on the very next fresh chat. VN mode's first screen now shows real art immediately
       instead of only after the first real reply lands.
+- [x] **VN presentation pass — the art is the subject, the UI is furniture.** The dialogue box had
+      grown into a dock: it carried the line, the utility row, the choices, the quick replies, the
+      assist strip and the composer, sized itself to its content (`min-h` up to `max-h-[40vh]`), and
+      sat flush to the bottom edge — so the scene behind it resized on every turn and the character
+      only ever got what was left over.
+      - **The box is now one floating glass panel of fixed height** (`VNDialogueBox.tsx`), carrying
+        dialogue and nothing else. Choices, quick replies, the assist strip and the per-line
+        utilities (swipe/regenerate/fork/voice/pin) float *outside* it — the utilities fade in on
+        hover rather than holding a row at rest. The cast fills the whole stage behind it, the way a
+        VN composes a shot, instead of the two splitting the height.
+      - **Inline input (`vnInputMode`, new; `'inline'` default).** The player writes in the dialogue
+        box itself: same frame, same position, and — enforced in CSS rather than by two clamps kept
+        in sync by hand (`.vn-box`/`.vn-box-body-write`/`.vn-box-foot`) — the same height to the
+        pixel, so nothing on screen moves as the box changes hands. Enter takes it, Escape hands it
+        back, and a draft that arrived some other way (an impersonation suggestion, a prefilled
+        Unlocks action) holds it open so it can never be composed off-screen. What distinguishes the
+        two states is identity, not geometry: the nameplate becomes the persona in accent with a pen
+        glyph, and the frame picks up a soft accent ring. `'docked'` keeps the old always-visible
+        composer bar for anyone who prefers it.
+      - **Choices moved out of the box.** `vnChoiceStyle` now defaults to `'centered'`, restyled as
+        wide bars over the character with 1-9 keyboard shortcuts and a soft pool of shade rather
+        than a full-stage blackout. `'docked'` floats its pills above the box instead of inside it.
+      - One glass material for the whole stage (`.vn-glass`/`.vn-glass-solid`), shared by the HUD,
+        the quick menu, the box, the floating chips and `StageCard`'s `vn` variant, replacing four
+        hand-rolled `bg-black/NN + backdrop-blur` combinations that had drifted apart. Backgrounds
+        now cross-dissolve (a `background` property can't be transitioned, so a scene change used to
+        be a hard cut). The HUD and toolbar stack on a phone, where sitting side by side had crushed
+        the HUD to an unreadable stub.
+- [x] **Menus over the stage match the stage** (`.vn-chrome` + `useVnChromeStore.ts`). A panel built
+      on the shared `Modal`/`ConfirmDialog`/`TuningPanel`/`CommandPalette` shells is app chrome — in
+      the light theme, a white slab dropped onto a night scene. Rather than restyling a dozen panels
+      one at a time, the class re-points the *theme tokens* within the panel's own subtree, so every
+      `bg-bg-elevated`/`text-text`/`border-border` inside it resolves to the stage's glass and the
+      contents follow for free. Scoped, never global: the sidebar keeps the user's actual theme.
+- [x] **Background detection: an unplaced scene no longer means the void** (#user-reported: "a lot of
+      times it goes into the purple default one, especially during first messages"). Root cause was
+      structural, not a bug in any one step: a chat's opening line is a static `first_mes` that
+      nobody generates, so it carries no `<<scene:>>` tag; `detectGreetingScene`'s model pass is
+      deliberately skipped for a world with no uploaded art; and `matchBackgroundKeyword` only
+      matched a background's own *label*, which prose almost never uses ("lockers", not "school
+      hallway"). All three misses bottomed out at `placeholderGradient(undefined)` — hue 250, the
+      purple slab.
+      - `resolveSceneBackground` (`vn/resolveBackground.ts`) is now the single ordered walk for
+        "where is this scene": tag -> active event -> the chat's established scene location -> **the
+        narration itself** -> the world's opening shot -> a still-locked tag painted as a place but
+        never handed its art. 10 tests.
+      - `BACKGROUND_ALIASES` gives all 31 built-in locations the phrases prose actually uses, and
+        matching became whole-phrase rather than bare containment (so `cafe` no longer fires inside
+        "cafeteria", nor `park` inside "parking lot").
+      - The placeholder itself was a hash of the id into a random hue — an arbitrary colour with no
+        relationship to the room. `sceneGradient` (`vn/placeholder.ts`) replaces it with 16 authored
+        light/sky/ground environments mapped across those locations, each with a night variant: a
+        warm afternoon classroom, a fluorescent konbini, a dim theatre. `scripts/vn-gradient-swatches.mts`
+        renders the whole set to an HTML sheet for eyeballing.
+      **Live-verified against the real chat**: with the greeting's scene tag nulled out entirely —
+      the exact reported shape — the stage read "old media room"/"card-catalog" out of the narration
+      and put her in the library, which is where that scene is actually set, instead of falling back
+      to the world default (let alone the void).
+- [x] **Catalog pass — items, gifts, and the intimacy ladder** (`CATALOG_IDEAS.md` documents the
+      whole design; steps 1-7 of its suggested order are done). The intimacy catalog went 37 entries
+      to 108, and two structural gaps behind it got closed first.
+      - **`BUILT_IN_ENTRY_KINKS` was half-empty, which made the hard-limit system inert for half the
+        catalog.** `kinks.ts` enforces limits structurally — a limited entry is never rendered, never
+        traversable, and its `promptNote` never enters context — but `intimacyEntryKinks` falls
+        through to `[]`, and `isAnyHardLimit([])` is always false. 15 of 30 built-ins were untagged.
+        Every entry is tagged now, and seven new ids (`anal`, `marking`, `overstimulation`,
+        `bodily_fluids`, `recording`, `voyeurism`, `degradation`) went into `BUILT_IN_KINKS`, without
+        which an author could not *name* those limits however carefully an entry was written.
+      - **New `requiresEagerness`**, a gate above "not a hard limit": the entry is withheld unless
+        the character's `kinkValence` is actually positive. An unauthored character scores 0 on
+        everything, and for a couple of entries 0 must mean "not offered" rather than "no objection
+        on record" — `kinkValence`'s own doc already says nothing on record is permission. Sits
+        deliberately *above* `isEntryAllowed`'s no-profile early return, since an unauthored
+        character is the exact case it exists for; behind it, it would have been inert precisely
+        when it mattered.
+      - **New `affection` category.** `isExplicitCategory` was `category !== 'kissing_spot'`, so
+        filing "holding hands in public" under `activity` would have hidden it from every rating
+        except `'explicit'` — exactly backwards. It sits beside `kissing_spot` as the second
+        non-explicit category and carries the 15-35 warmth ladder the catalog never had.
+      - **New `requiresBackground`**, filtered against `resolveSceneBackground` in both the panel and
+        the prompt path: "the edge of the onsen" is nonsense in a classroom and warmth is no kind of
+        gate on that. Applied only when the caller knows where the scene is — unknown is not wrong.
+      - **Re-gates**: spooning 55/dating -> 35/none (the one position that is entirely innocent
+        clothed), against-the-wall 90/exclusive -> 75/dating (it was stricter than missionary while
+        being no more exposed).
+      - **`DEFAULT_ITEM_CATALOG`** (`items.ts`), which did not exist — `getItemCatalog` was
+        `world?.items ?? []`, so the whole `ItemEffect` engine, the Bag panel and the Shop's Items
+        section were invisible on a fresh install unless a world author wrote items by hand. 14
+        entries including the first deliberate `tension` reducers (the one dimension where down is
+        good, and nothing moved it) and a zero-price "picked-up shift" as the shop's income tap.
+      - **`ItemEffect.multi`**, because most things a consumable naturally wants to do are two-part.
+        The use-item path now accumulates one patch rather than branching per effect — two sequential
+        writes would have given the second a stale read of the first's stats and silently dropped it.
+      - **Gifts 6 -> 20**, sized so every tag in `catalogVisuals.ts`'s `TAG_ICONS` has at least two
+        entries. Not decoration: with 6 gifts across 9 tags an authored `giftPreferences` had almost
+        nothing to discriminate between, and `giftRepetitionMultiplier` started flattening repeats
+        before there was an alternative to switch to. A test pins the two-per-tag floor.
+      27 new tests (2087 total), typecheck + build clean, and live-verified in the app: the new
+      Closeness category renders with its 15-warmth rung, spooning shows its new 35 gate, and the new
+      toys appear in the Shop.
+- [x] **Relationship panel — a game menu rather than a settings form.** Icon tab rail
+      (`ui/TabRail.tsx`) in place of underlined text tabs, the bond header as a character card
+      (portrait, name, stage, meter) instead of a stack of full-width paragraphs that cost most of
+      the panel's height, per-dimension glyphs on the stat grid, earned/locked badges on scene flags
+      with an n/5 counter, per-category cards in Unlocks, and the coin balance in the shell header
+      where three of the four tabs can see it. `Section` gained an optional `icon`; `Modal` a
+      `compact` padding mode.
 - [x] Sprite transitions: `vn-sprite` idle animation in `globals.css`, respects `reducedMotion`.
 - [x] Name-plate + dialogue box styled to match VN layout with character accent color.
 - [x] Sprite crossfade: `VNStage.tsx` now dips to transparent and back instead of hard-swapping
@@ -1203,6 +1310,26 @@ stores everything as JSON blobs, most new fields need no migrations — just ext
       sprites → vision → validated → persisted to `scene` + `swipeScenes`); a synthetic beach photo
       classified to `{background:"beach",mood:"calm"}`; the assist shows in the running-assists
       strip as "Reading the scene"; a genuinely fresh page load throws zero console errors.
+- [x] **Nano-GPT as a known OpenAI-compatible provider** (#142) — user asked to add support for
+      [Nano-GPT](https://nano-gpt.com), a pay-as-you-go, privacy-focused model gateway (hundreds of
+      models behind one key, crypto or card, no subscription). It speaks the OpenAI Chat Completions
+      wire format at `https://nano-gpt.com/api/v1`, so `OpenAICompatibleClient` already covers
+      generation and streaming unchanged — the work was one `KNOWN_CHAT_PROVIDERS` entry
+      ([src/lib/api/chatBackend.ts](src/lib/api/chatBackend.ts)), placed next to OpenRouter as the
+      other "one key, many models" aggregator, plus one real fix. Nano-GPT's `GET /api/v1/models` is
+      public — it 200s for any key, valid or not, exactly the OpenRouter problem the playthrough-QA
+      pass caught — so a fat-fingered key would have shown a false green "Connected", then failed on
+      the first real message. `checkConnection()` now routes a `nano-gpt.com` base URL to a new
+      `checkNanoGptBalance()` that hits `POST /api/check-balance` (one level up from `/api/v1`, key
+      as `x-api-key`) and surfaces the account's USD balance as the status detail, mirroring
+      OpenRouter's usage readout. Live-checked as far as an account-less test allows: with a bogus
+      key entered in Settings → Connection, the real `check-balance` endpoint 401s (`malformed_api_key`)
+      and the UI correctly shows "Not reachable — The API key was rejected." rather than a false
+      green. Honesty carried over from #122: the generation path is correct per Nano-GPT's own
+      current docs (OpenAI wire format, same client as every other provider) but not exercised
+      against a real paid key here — same status as every provider in the list except OpenRouter.
+      9 new tests (`chatBackend.test.ts` provider-list invariants + `openaiCompatible.test.ts`
+      Nano-GPT connection-check cases), 1623 total, typecheck + build clean.
 
 ## 9. Technical quality / security
 - [x] **Playthrough-tail pass: the confirmed defects `PLAYTHROUGH_REPORT.md` left open.** The
@@ -5077,3 +5204,85 @@ echoed the `Kai: ` speaker label into the suggestion, since the gen cue already 
 by routing the impersonate result through the same `cleanModelOutput` the character path uses, with
 the persona name as `charName` (strips the leading label) and the character name as `personaName`
 (cuts a run-on into {{char}}'s reply). 6 new `builder.test.ts` / `slop.test.ts` cases.
+
+A later one-off ask, ~~"add support for Nano-GPT"~~ (#142, section 8): it's an OpenAI-compatible
+model gateway, so it's one `KNOWN_CHAT_PROVIDERS` row plus a dedicated key check — its `/api/v1/models`
+is public like OpenRouter's, so `checkConnection()` hits `POST /api/check-balance` instead and shows
+the account's USD balance. See section 8's checked item for detail.
+
+~~"Add support for Docker"~~ (#143): the app had no production server at all — `npm run dev` leans on
+Vite to serve the client and proxy `/api` + `/avatars` to Express, and nothing replaced that for a
+build. Added:
+- **Express serves the client build** when `dist/` exists (`server/app.ts`, right before the error
+  handler): `express.static(dist)` plus a GET-only SPA fallback to `index.html` that skips `/api/`
+  and `/avatars/` so those keep their existing behaviour (real routes win, unknown `/api` still
+  404s). Absent in dev, so `npm run dev` is untouched. New `npm start` = `node --experimental-sqlite
+  server/index.ts` runs this locally too — no tsx, Node 24 type-strips the server's `.ts` directly.
+- **`API_HOST` env** (`server/index.ts`), default `127.0.0.1` as before; the image sets `0.0.0.0`
+  because a container can't publish a port it can't reach.
+- **`RP_ALLOWED_ORIGINS` env** (`server/originCheck.ts`): comma-separated extra origins accepted
+  beyond loopback, for LAN/reverse-proxy access; a lone `*` disables the check. Loopback-only
+  default and the whole cross-site guard are otherwise unchanged. 2 new `originCheck.test.ts` cases.
+- **`Dockerfile`** (multi-stage: `npm ci` + `npm run build`, then a runtime stage with
+  `npm ci --omit=dev` — no vite/tsx/typescript — plus `server/`, `seed/`, and the built `dist/`),
+  **`.dockerignore`**, **`docker-compose.yml`** (one service, `./data` volume, port 3001), **`DOCKER.md`**.
+- Model backends are unaffected — the browser calls those directly, so the container never reaches
+  them; `DOCKER.md` covers the `host.docker.internal` case for a fully-containerised setup.
+- Verified: image builds, container boots, seeds into the volume, serves the app (loaded in a real
+  browser, no console errors), API + SPA deep-links + static assets all 200, cross-origin still 403.
+
+~~"Fix the setup flow"~~ (#144), from a Reddit review of onboarding — seven concrete gripes, all
+real:
+- **"Forces KoboldCpp."** The Welcome screen's "Local model" path only spoke Kobold's API, so a
+  local llama.cpp/LM Studio/Ollama server (OpenAI wire format at `/v1`) couldn't be used there.
+  New `src/lib/api/detectBackend.ts` `detectLocalBackend()` probes a URL for Kobold's
+  `/api/v1/model` *and* the OpenAI `/v1/models` shape (Kobold first — its client is written
+  against Kobold's own API, and it serves an OpenAI shim too), and the tabs are now "Local server"
+  / "Cloud provider" with the local one auto-detecting which protocol answered. LM Studio / Ollama
+  dropped from the cloud picker (they're local).
+- **"Doesn't accept empty API keys."** `useHostedBackendStatus` hard-failed on a blank key before
+  trying; now only NovelAI does (it genuinely needs one), and everything else runs the real check
+  and shows the provider's own 401 if a key was actually required.
+- **"Check button scans ports/IPs."** Deleted the automatic `useEffect` that probed
+  `localhost:5001/5000` whenever offline. Check now hits exactly the address in the field; a
+  separate, explicit "Not sure of the address? Try the common local ports" button does the scan
+  only on click.
+- **"No model selection from the API."** New `useOpenAiModels` hook + `listOpenAiModels()` populate
+  a real `<select>` from the provider's `/models`, with a "type it in" escape hatch and a plain
+  field fallback when `/models` isn't exposed. Wired into both the Welcome screen and Settings →
+  Connection.
+- **"Context is 8k, model max is 131k."** `DEFAULT_SAMPLER.max_context_length` 8192 → 32768 as a
+  floor, and new `contextLengthAuto` (default on) + `useAutoContextLength` (mounted in `App`) track
+  the connected model's real limit: KoboldCpp's `true_max_context_length`, or an OpenAI provider's
+  `context_length`/`max_model_len` from `/models`. Any manual edit to the field switches it off.
+  KoboldCpp is polled (its model can change); a hosted provider is fetched once per config, the
+  same metered-endpoint discipline `useHostedBackendStatus` keeps.
+- **"Response length 4k, why a slider, no override."** Both "Max context length" and "Max response
+  length" are now `NumberField`s with no ceiling; `max_length` default 300 → 512.
+- **Em-dashes.** Every em-dash (and the two en-dashes) in user-visible UI copy is gone — ~250
+  replacements across 63 files, AST-scoped to string literals and JSX text so comments and code are
+  untouched. Prompt-building strings (`relationshipAssist.ts`, `mindGuidance.ts`, `aiAssist.ts`,
+  …) were deliberately left alone: they're model-facing, not screen-facing, and rewriting tuned
+  prompt text risks behaviour drift. Model *output* em-dashes were already handled by an explicit
+  "never use em dashes" line in `useChatSession.ts`. Replacements: a period + capital for a clause
+  break, a comma for a parenthetical, a colon for a list, real parens for an "e.g." tail, `·` for a
+  glyph separator; then a hand pass over the awkward residue.
+- New `detectBackend.test.ts` (11 cases); live-verified end to end against a mock OpenAI-compatible
+  server — detect → normalise URL to `/v1` → model dropdown → context auto-set to the model's
+  131072, and the auto toggle round-trips. Typecheck + full suite (1636) clean, production build clean.
+
+~~"Make long chats cheap on the GPU"~~ (#145): measured, then fixed, where a 12B Gemma 4 on an RTX 2080 Ti spent its time. Full write-up with numbers and launch flags in [EFFICIENCY.md](EFFICIENCY.md); replay tool `scripts/sim-cache.mts`.
+- **Wrong turn format.** Gemma 4 uses `<|turn>`/`<turn|>`; the old `gemma` template fed it plain text and it recited the steering as numbered lists. New `gemma4` builtin (empty thought channel on the cue only, `assistantCuePrefix`), detected from `/props`, and `useAutoInstructTemplate` switches an old `gemma` setting. The generation cue also no longer ends in a space.
+- **Cache-friendly prompts** (`cacheFriendlyPrompts`, default on): summary last in the fixed block; keyword lore and remembered facts after the history; window start moves 6 messages at a time; compaction (`prompt/compaction.ts`) lets history fill the window then folds it to a kept fraction (`compactionKeepPercent`) once, instead of summarizing every ~3 turns with 12 messages kept. Facts are ranked against the live chat (`facts.ts`).
+- **Cheaper assists.** Relationship judge: rules first, exchange last, omit empty keys (~110 → ~25 output tokens), clamp overshoots, tolerate `+2`, stop sending the reply twice. Choices on request (`✦ Suggest replies`) plus a "Lean" preset. Expression re-check only when the tag repeats. Reasoning blocks stripped from assist output (they were landing in the memory summary).
+- **Visibility.** "Model time this session" in Settings, and `cache reused` / `full prompt re-read` in the HUD.
+- **Server side** (documented, not app-controllable): `--smartcache 6` (verified: the relationship check re-reads 0.04 s instead of ~1 s). `--swapadding` did not help: KoboldCpp reuses a prompt only if the text after the divergence point is under ~450 tokens, and the app's post-history tail is ~1,500, so the main reply always re-reads its whole prompt. Closing that is the biggest open saving (see EFFICIENCY.md).
+- Simulated 60 turns: 20.5 → 13.6 s GPU per turn now, with a 2-3x larger verbatim window.
+- **Found while testing live (#145b):** the correct Gemma 4 template exposed that every background check returned nothing (they stop on ```````, and the model opens answers with a fence), so the relationship system was silently dead; fixed centrally in `generateWithTimeout` (`trimCodeFence`). Also: a per-reply "reaction feed" (`ReactionFeed`, Trust +1 etc.), number-key picks for suggested replies, Esc to stop a reply, streamed text updates throttled to one per 60 ms.
+- **Open:** shrink the post-history tail under ~450 tokens (or test `--batchsize 1024`); assists still queue ahead of a quick next message (no cancellation); a draft model for speculative decoding was not tried (needs a download).
+
+~~"Rewrite Sumire; items, memory and general code"~~ (#146):
+- **Sumire rewritten** (`server/seedContent.ts`, card version 3.0): a tiny, loud, secretly lonely tsundere in the spirit of Toradora!'s Taiga, as an original character. Slapstick temper that never wounds, hunger as the fastest way through her guard, an empty flat, sideways apologies, "Stray" for {{user}}, a rotating set of physical tells, and a hard drop into small polite quiet when she is actually hurt. New greetings, example dialogue, nine lore entries, gift tastes, schedule, voice data. **She is now twenty and a university student** (the blazer is a quirk); the previous card had her as a high schooler under an explicit-content-capable system. No em dashes anywhere in the card. `scripts/refresh-seed-sumire.mts` pushes the bundled card, gifts and items into an existing install (backs up to `data/backups/`); `scripts/voice-test.mts` plays canned lines against the live model.
+- **Em dashes**: replies are cleaned (`replaceEmDashes`: ellipsis for a cut-off line, comma otherwise; Settings → Writing style), and `scripts/strip-em-dashes.mts` rewrote 208 string literals across the prompt, guidance and seed files (comments and regexes untouched).
+- **Items**: a new `mood` effect (food and tea change how she feels), richer seed shop (onigiri, ramen, bento, melon bread, spare umbrella, apology melon bread, an out-of-print volume), editor support in Worlds. Found and fixed a server bug: `normalizeItemEffect` flattened every `multi` item to "+1 affection" on save; it now lives in `server/itemEffects.ts`, keeps multi (one level) and mood.
+- **Memory**: new facts that near-duplicate one on record now strengthen it instead of piling up, and the store is capped at 60 active facts (open threads and importance 0.8+ are never retired) (`worldinfo/factMemory.ts`). The summarizer prompt now puts its rules first and asks for names, promises, preferences and unresolved threads, with who-said-what kept straight (it had been swapping speakers).

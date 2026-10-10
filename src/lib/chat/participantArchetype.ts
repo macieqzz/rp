@@ -56,7 +56,7 @@ const ARCHETYPE_LINES: Record<RelationshipArchetype, (speaker: string, other: st
   rival: (speaker, other, quote) =>
     `${speaker} and ${other} have a real, specific rivalry (authored: "${quote}"). Let that competitive edge, quick to needle or one-up, guarded about admitting respect, color ${speaker}'s tone here. This is its own dynamic, not a stand-in for romantic interest in {{user}}.`,
   found_family: (speaker, other, quote) =>
-    `${speaker} treats ${other} like family (authored: "${quote}") — protective, unconditionally warm, comfortable enough to tease or worry aloud. Familial closeness, not romantic framing.`,
+    `${speaker} treats ${other} like family (authored: "${quote}"), protective, unconditionally warm, comfortable enough to tease or worry aloud. Familial closeness, not romantic framing.`,
   mentor_mentee: (speaker, other, quote) =>
     `There's a real teacher/student dynamic between ${speaker} and ${other} (authored: "${quote}"). Let whichever direction that actually runs show through: guidance and genuine expectations on one side, some deference (with room to push back) on the other.`,
   power_imbalanced: (speaker, other, quote) =>
@@ -88,7 +88,7 @@ export function rivalCommitmentFraming(
       return `${primaryName} and ${personaName} are exclusive now, which changes what this rivalry can honestly mean: real jealousy or an old torch still carried is fair, but acting like the field is still open would read as delusional or a real boundary problem.`
     case 'living_together':
     case 'married':
-      return `${primaryName} and ${personaName} have a serious, settled commitment by now (${primaryCommitmentStatus === 'married' ? 'married' : 'living together'}) — this rivalry has to read as history, a private old feeling, or begrudging respect, not anything still actively contesting that commitment.`
+      return `${primaryName} and ${personaName} have a serious, settled commitment by now (${primaryCommitmentStatus === 'married' ? 'married' : 'living together'}), this rivalry has to read as history, a private old feeling, or begrudging respect, not anything still actively contesting that commitment.`
     case 'none':
     default:
       return ''
@@ -98,7 +98,7 @@ export function rivalCommitmentFraming(
 /** Sharpens a live jealousy `SceneFlag` beat when the rival is physically present in-scene; `''` when the flag isn't active. */
 export function rivalJealousyIntensifier(rivalName: string, jealousyFlagActive: boolean | undefined): string {
   if (!jealousyFlagActive) return ''
-  return `This is playing out with ${rivalName} genuinely standing right here, not just mentioned or heard about secondhand — let that presence sharpen the jealousy beat: less patience, sharper edges, higher stakes than the same tension would read at a distance.`
+  return `This is playing out with ${rivalName} genuinely standing right here, not just mentioned or heard about secondhand, let that presence sharpen the jealousy beat: less patience, sharper edges, higher stakes than the same tension would read at a distance.`
 }
 
 export interface ParticipantGuidanceParams {
@@ -120,7 +120,7 @@ export interface ParticipantGuidanceParams {
 /** Builds the model-facing relationship guidance line for a non-primary participant, layering archetype and (for rivals) commitment/jealousy framing on top of a warmth baseline. */
 export function participantRelationshipGuidance(params: ParticipantGuidanceParams): string {
   const other = params.primaryName ?? 'the rest of the group'
-  const baseline = `${params.speakerName} has their own independent footing with ${params.personaName || 'you'} here, separate from ${other}'s — right now that reads as ${warmthRegister(params.warmth)}. Don't default to the same romantic warmth ${other} gets; play ${params.speakerName}'s own footing honestly.`
+  const baseline = `${params.speakerName} has their own independent footing with ${params.personaName || 'you'} here, separate from ${other}'s, right now that reads as ${warmthRegister(params.warmth)}. Don't default to the same romantic warmth ${other} gets; play ${params.speakerName}'s own footing honestly.`
   const archetypeLine = params.archetype ? archetypeGuidance(params.archetype, params.speakerName, params.archetypeOtherName ?? params.personaName ?? 'you') : ''
   const isRival = params.archetype?.archetype === 'rival'
   const commitmentLine = isRival

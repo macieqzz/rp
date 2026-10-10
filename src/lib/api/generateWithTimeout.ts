@@ -2,12 +2,24 @@ import type { ChatBackend } from './chatBackend'
 import type { GenerateRequest } from './types'
 import type { InstructTemplate } from '../prompt/instructTemplates'
 import { wrapAssistPrompt } from '../prompt/instructTemplates'
+import { recordCompute } from './computeLog'
+import { stripThinkBlocks } from '../text/slop'
 
 // Races a backend `generate()` call against a timeout, aborting the request and turning a timeout
 // into a clear, labelled error. An `external` AbortSignal (e.g. the user hitting Stop) aborts
 // immediately instead of waiting out the timeout, and passes through as a plain AbortError.
 
 export const ASSIST_TIMEOUT_MS = 45_000
+
+const FENCE = '```'
+
+/** Keeps what sits between a leading code fence and its closing one; with no leading fence, cuts at the first. */
+export function trimCodeFence(text: string): string {
+  const opener = text.match(/^\s*```[\w-]*[ \t]*\n?/)
+  const body = opener ? text.slice(opener[0].length) : text
+  const close = body.indexOf(FENCE)
+  return close === -1 ? body : body.slice(0, close)
+}
 
 /**
  * Optional prompt shaping for a background judge/assist call — never used by the main reply path
@@ -36,21 +48,28 @@ export async function generateWithTimeout(
   else external?.addEventListener('abort', onExternalAbort)
   const timer = setTimeout(() => controller.abort(), ASSIST_TIMEOUT_MS)
   try {
-    let shapedParams = params
+    // A stop on the fence would end an answer that opens with one (empty result), so cut at the closing fence afterwards instead.
+    const stopsOnFence = !!params.stop_sequence?.includes(FENCE)
+    let shapedParams = stopsOnFence ? { ...params, stop_sequence: params.stop_sequence!.filter((s) => s !== FENCE) } : params
     if (shaping?.template) {
       const template = shaping.template
       shapedParams = {
         ...shapedParams,
         prompt: wrapAssistPrompt(params.prompt, template),
         stop_sequence: template.stopSequences.length
-          ? [...(params.stop_sequence ?? []), ...template.stopSequences]
-          : params.stop_sequence,
+          ? [...(shapedParams.stop_sequence ?? []), ...template.stopSequences]
+          : shapedParams.stop_sequence,
       }
     }
     if (shaping?.reasoningReserve) {
       shapedParams = { ...shapedParams, max_length: params.max_length + Math.max(0, shaping.reasoningReserve) }
     }
-    return await client.generate(shapedParams, controller.signal)
+    const startedAt = performance.now()
+    const raw = await client.generate(shapedParams, controller.signal)
+    recordCompute({ label, ms: performance.now() - startedAt, promptChars: shapedParams.prompt.length, outChars: raw.length })
+    // Otherwise a reasoning block lands verbatim in stored text such as the memory summary.
+    const cleaned = stripThinkBlocks(raw)
+    return stopsOnFence ? trimCodeFence(cleaned) : cleaned
   } catch (e) {
     if (external?.aborted) throw e instanceof Error ? e : new Error('aborted')
     if (controller.signal.aborted) {

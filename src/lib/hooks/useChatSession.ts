@@ -12,7 +12,11 @@ import { collectImageBase64, composeMessageText, type PendingAttachment } from '
 import { makeGenKey } from '@/lib/api/kobold'
 import { generateWithTimeout, type AssistShaping } from '@/lib/api/generateWithTimeout'
 import { useChatBackendClient } from '@/lib/hooks/useChatBackendClient'
-import { BUILTIN_SYSTEM_PROMPTS, buildPrompt, estimateTokens, type ChatMessage, type StyleGuidanceItem } from '@/lib/prompt/builder'
+import { BUILTIN_SYSTEM_PROMPTS, buildPrompt, estimateTokens, renderHistoryTurn, type ChatMessage, type StyleGuidanceItem } from '@/lib/prompt/builder'
+import { planCompaction } from '@/lib/prompt/compaction'
+import { recordCompute } from '@/lib/api/computeLog'
+import { pushReaction } from '@/lib/store/useReactionFeedStore'
+import { createTrailingThrottle } from './throttle'
 import { countTokensCached } from '@/lib/tokenCache'
 import { SUMMARY_MAX_LENGTH, summarizeMessages } from '@/lib/prompt/summarize'
 import { generateChoices } from '@/lib/prompt/choices'
@@ -215,6 +219,7 @@ import {
 import { assessRapport } from '@/lib/dating/rapport'
 import { bookAppliesToChat } from '@/lib/worldinfo/scope'
 import { buildFactsLorebook } from '@/lib/worldinfo/facts'
+import { pickFactsToRetire, planFactWrite } from '@/lib/worldinfo/factMemory'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 import { errorMessage, toastError, toastInfo, toastSuccess } from '@/lib/store/useToastStore'
 import { playSendBlip } from '@/lib/audio/sfx'
@@ -224,12 +229,16 @@ import type { ChoiceOption, RelationshipDimension, RelationshipWarning, Scene, S
 
 /** Minimum number of newly-eligible messages before auto-summarize bothers running (avoids a summarization call on every single turn). */
 const MIN_BATCH_FOR_AUTO_SUMMARY = 6
+/** Minimum gap between streamed-text UI updates. */
+const STREAM_UI_INTERVAL_MS = 60
+/** Messages the window start advances by in cache-friendly mode. */
+const HISTORY_TRIM_GRID = 6
 
 /** Extra generation rounds `runGeneration` allows itself when a reply looks cut off by hitting max_length, before giving up and leaving it as-is. */
 const MAX_AUTO_CONTINUE_ROUNDS = 2
 
 /** A chat-level override (`Chat.assistOverrides`) wins over the global Settings → Generation default — unset falls back to it, same precedence style as `Character.instructTemplateId`. */
-function effectiveAssistFlag(chatOverride: boolean | undefined, globalDefault: boolean): boolean {
+export function effectiveAssistFlag(chatOverride: boolean | undefined, globalDefault: boolean): boolean {
   return chatOverride ?? globalDefault
 }
 
@@ -345,7 +354,7 @@ function applyRelationshipRisk(opts: {
   let stats = opts.stats
   if (result.brokeUpJustNow) {
     stats = applyBreakupScar(opts.stats)
-    toastError(`${opts.charName} broke things off — the strain never got resolved in time.`)
+    toastError(`${opts.charName} broke things off, the strain never got resolved in time.`)
   } else if (result.warnedJustNow) {
     toastError(`${opts.charName}'s relationship is on the rocks: ${result.warning?.reason}. Fix things before it's too late.`)
   } else if (result.clearedJustNow) {
@@ -405,6 +414,8 @@ export function useChatSession(chatId: string | null) {
   const autoSummarize = useSettingsStore((s) => s.autoSummarize)
   const keepRecentMessages = useSettingsStore((s) => s.keepRecentMessages)
   const summaryDetail = useSettingsStore((s) => s.summaryDetail)
+  const cacheFriendly = useSettingsStore((s) => s.cacheFriendlyPrompts)
+  const compactionKeepPercent = useSettingsStore((s) => s.compactionKeepPercent)
   const autoDetectTasks = useSettingsStore((s) => s.autoDetectTasks)
   const autoTrackRelationship = useSettingsStore((s) => s.autoTrackRelationship)
   const relationshipDifficulty = useSettingsStore((s) => s.relationshipDifficulty)
@@ -414,6 +425,7 @@ export function useChatSession(chatId: string | null) {
   const reducedAudio = useSettingsStore((s) => s.reducedAudio)
   const styleGuidanceNote = useSettingsStore((s) => s.styleGuidance)
   const avoidEmDashes = useSettingsStore((s) => s.avoidEmDashes)
+  const replaceEmDashes = useSettingsStore((s) => s.replaceEmDashes)
   const slowBurnPacing = useSettingsStore((s) => s.slowBurnPacing)
   const globalIntimacyLevel = useSettingsStore((s) => s.intimacyLevel)
   const visionSceneDetection = useSettingsStore((s) => s.visionSceneDetection)
@@ -602,7 +614,12 @@ export function useChatSession(chatId: string | null) {
         )
         .map((b) => ({ ...b.book, sourceKey: `book:${b.id}` }))
       const worldLorebook = world?.lorebook ? [{ ...world.lorebook, sourceKey: `world:${world.id}` }] : []
-      const factsLorebook = buildFactsLorebook(activeFacts).map((b) => ({ ...b, sourceKey: 'facts' }))
+      // Facts trail the history in cache-friendly mode, so per-turn ranking can't disturb the cached prefix.
+      const factsLorebook = buildFactsLorebook(
+        activeFacts,
+        undefined,
+        cacheFriendly ? historyForPrompt.slice(-4).map((m) => m.text).join(' ') : '',
+      ).map((b) => ({ ...b, sourceKey: 'facts' }))
       const affection = freshChat.affection ?? 0
       // One read of the char-reply count for the whole build — every turn-scoped window check below keys off it.
       const charReplyCount = countCharReplies(messages)
@@ -1078,6 +1095,8 @@ export function useChatSession(chatId: string | null) {
         lorebooks: [...worldLorebook, ...lorebooks, ...boundBooks, ...factsLorebook],
         template,
         contextBudget: Math.max(contextBudget, 256),
+        cacheFriendly,
+        historyTrimGrid: cacheFriendly ? HISTORY_TRIM_GRID : 1,
         scanDepth: 8,
         promptSections,
         countTokens,
@@ -1127,6 +1146,7 @@ export function useChatSession(chatId: string | null) {
       activeObjective,
       autoTrackRelationship,
       avoidEmDashes,
+      cacheFriendly,
       character,
       chat,
       countTokens,
@@ -1147,9 +1167,94 @@ export function useChatSession(chatId: string | null) {
     ],
   )
 
+  /** Runs the summarizer over `batch` and persists the result, advancing the summary cutoff to `cutoffTimestamp`. */
+  const foldIntoSummary = useCallback(
+    async (existingSummary: string, batch: ChatMessage[], cutoffTimestamp: number) => {
+      if (!chat || !character) return existingSummary
+      const updated = await summarizeMessages({
+        existingSummary,
+        messages: batch,
+        charName: character.card.name,
+        userName: persona?.name || 'You',
+        detail: summaryDetail,
+        voiceFingerprint: character.voiceFingerprint,
+        generate: (prompt) =>
+          generateWithTimeout(
+            client,
+            {
+              prompt,
+              max_length: SUMMARY_MAX_LENGTH[summaryDetail],
+              max_context_length: sampler.max_context_length,
+              temperature: 0.4,
+              top_p: 1,
+              top_k: 0,
+              min_p: 0,
+              typical: 1,
+              tfs: 1,
+              rep_pen: 1.1,
+              rep_pen_range: 1024,
+              rep_pen_slope: 0.7,
+            },
+            'Update memory summary',
+            undefined,
+            assistShaping,
+          ),
+      })
+      await chatsApi.update(chat.id, { summary: updated, summaryUpToTimestamp: cutoffTimestamp })
+      return updated
+    },
+    [character, chat, client, persona, sampler.max_context_length, summaryDetail],
+  )
+
+  /** Cache-friendly memory: fold the oldest history into the summary in one large step once the window is nearly full (see `compaction.ts`). */
+  const compactMemory = useCallback(
+    async (history: ChatMessage[], manual = false): Promise<string | null> => {
+      if (!chat || !character) return null
+      const fresh = (await chatsApi.get(chat.id)) ?? chat
+      const cutoff = fresh.summaryUpToTimestamp ?? 0
+      const createdAtById = new Map(messages.map((m) => [m.id, m.createdAt]))
+      const verbatim = history.filter((m) => m.text.trim() && (createdAtById.get(m.id) ?? Infinity) > cutoff)
+      if (verbatim.length === 0) return fresh.summary ?? null
+
+      const built = await buildCurrentPrompt(history)
+      if (!built) return fresh.summary ?? null
+      const macroCtx = { charName: character.card.name, userName: persona?.name || 'You' }
+      const tokens = await Promise.all(
+        verbatim.map((m) => countTokens(renderHistoryTurn(m, template, macroCtx, regexScripts))),
+      )
+      const tail = tokens.slice(-4)
+      const growth = tail.length ? (tail.reduce((a, b) => a + b, 0) / tail.length) * 2 : 0
+      const fold = planCompaction({
+        turns: verbatim.map((m, i) => ({ role: m.role, tokens: tokens[i] })),
+        capacity: built.historyCapacity,
+        growth,
+        // Manual "update summary": fold now, to a smaller kept window.
+        ...(manual ? { highWater: 0, lowWater: Math.min(compactionKeepPercent / 100, 0.3) } : { lowWater: compactionKeepPercent / 100 }),
+      })
+      if (fold === 0) return fresh.summary ?? null
+
+      const batch = verbatim.slice(0, fold)
+      const last = messages.find((m) => m.id === batch[batch.length - 1].id)
+      if (!last) return fresh.summary ?? null
+      return foldIntoSummary(fresh.summary ?? '', batch, last.createdAt)
+    },
+    [buildCurrentPrompt, character, chat, compactionKeepPercent, countTokens, foldIntoSummary, messages, persona, regexScripts, template],
+  )
+
   const updateMemorySummary = useCallback(
-    async (opts?: { force?: boolean }): Promise<string | null> => {
+    async (opts?: { force?: boolean; history?: ChatMessage[] }): Promise<string | null> => {
       if (!chat || !character || summarizingRef.current) return chat?.summary ?? null
+      if (cacheFriendly) {
+        summarizingRef.current = true
+        try {
+          return await compactMemory(
+            opts?.history ?? messages.map((m) => ({ id: m.id, role: m.role, name: m.name, text: m.text })),
+            !!opts?.force && !opts.history,
+          )
+        } finally {
+          summarizingRef.current = false
+        }
+      }
       const eligible = messages.slice(0, Math.max(0, messages.length - keepRecentMessages))
       const already = chat.summaryUpToTimestamp ?? 0
       const newBatch = eligible.filter((m) => m.createdAt > already && m.text.trim())
@@ -1158,43 +1263,16 @@ export function useChatSession(chatId: string | null) {
 
       summarizingRef.current = true
       try {
-        const updated = await summarizeMessages({
-          existingSummary: chat.summary ?? '',
-          messages: newBatch.map((m) => ({ id: m.id, role: m.role, name: m.name, text: m.text })),
-          charName: character.card.name,
-          userName: persona?.name || 'You',
-          detail: summaryDetail,
-          voiceFingerprint: character.voiceFingerprint,
-          generate: (prompt) =>
-            generateWithTimeout(
-              client,
-              {
-                prompt,
-                max_length: SUMMARY_MAX_LENGTH[summaryDetail],
-                max_context_length: sampler.max_context_length,
-                temperature: 0.4,
-                top_p: 1,
-                top_k: 0,
-                min_p: 0,
-                typical: 1,
-                tfs: 1,
-                rep_pen: 1.1,
-                rep_pen_range: 1024,
-                rep_pen_slope: 0.7,
-              },
-              'Update memory summary',
-              undefined,
-              assistShaping,
-            ),
-        })
-        const summaryUpToTimestamp = newBatch[newBatch.length - 1].createdAt
-        await chatsApi.update(chat.id, { summary: updated, summaryUpToTimestamp })
-        return updated
+        return await foldIntoSummary(
+          chat.summary ?? '',
+          newBatch.map((m) => ({ id: m.id, role: m.role, name: m.name, text: m.text })),
+          newBatch[newBatch.length - 1].createdAt,
+        )
       } finally {
         summarizingRef.current = false
       }
     },
-    [character, chat, client, keepRecentMessages, messages, persona, sampler.max_context_length, summaryDetail],
+    [cacheFriendly, character, chat, compactMemory, foldIntoSummary, keepRecentMessages, messages],
   )
 
   /** Marks the given indices (into `pending`) done on `objective`. Shared by the standalone task-detection pass and the merged pass in `runGeneration`. */
@@ -1343,9 +1421,16 @@ export function useChatSession(chatId: string | null) {
       newFlags.forEach((flag) => existingFlags.add(flag))
       if (newFacts.length > 0) {
         const sourceMessageId = history[history.length - 1]?.id
-        for (const f of newFacts) {
-          chatFactsApi
-            .create({
+        // Written one after another against a fresh read: a near-duplicate strengthens the fact on record instead of adding a second copy, and the store stays bounded.
+        void (async () => {
+          const onRecord = await chatFactsApi.listByChat(chatIdForRelationship)
+          for (const f of newFacts) {
+            const plan = planFactWrite(f, onRecord)
+            if (plan.action === 'merge') {
+              await chatFactsApi.update(plan.targetId, plan.patch)
+              continue
+            }
+            const created = await chatFactsApi.create({
               chatId: chatIdForRelationship,
               text: f.text,
               sourceMessageId,
@@ -1353,8 +1438,10 @@ export function useChatSession(chatId: string | null) {
               valence: f.valence,
               unresolved: f.unresolved || undefined,
             })
-            .catch(() => {})
-        }
+            onRecord.push(created)
+          }
+          for (const id of pickFactsToRetire(onRecord.filter((r) => r.active))) await chatFactsApi.update(id, { active: false })
+        })().catch(() => {})
       }
       for (const i of resolvedFactIndices) {
         const closed = openThreads[i]
@@ -1699,6 +1786,7 @@ export function useChatSession(chatId: string | null) {
       // Append-only history alongside the running totals — answers "why is trust 62 now". Only logged when a dimension or flag genuinely moved.
       if (!noStatChange || newFlags.length > 0) {
         const changedDeltas = Object.fromEntries(Object.entries(deltas).filter(([, v]) => v !== 0))
+        if (speaker.id === freshChat.characterId) pushReaction({ chatId: chatIdForRelationship, deltas: changedDeltas, reason })
         relationshipEventsApi
           .create({
             chatId: chatIdForRelationship,
@@ -1918,6 +2006,11 @@ export function useChatSession(chatId: string | null) {
             patch.sceneFlags = [...flags]
             return
           }
+          if (effect.kind === 'mood') {
+            patch.mood = effect.mood
+            notes.push(`now feeling ${effect.mood}`)
+            return
+          }
           const dim = effect.dimension
           if (dim === 'affection') {
             affection = clampAffection(affection + effect.amount)
@@ -1931,7 +2024,7 @@ export function useChatSession(chatId: string | null) {
         apply(def.effect)
 
         await chatsApi.update(chatId, patch)
-        toastSuccess(notes.length ? `Used ${def.name} — ${notes.join(', ')}.` : `Used ${def.name}.`)
+        toastSuccess(notes.length ? `Used ${def.name}: ${notes.join(', ')}.` : `Used ${def.name}.`)
       })
     },
     [character, chatId, world],
@@ -2028,7 +2121,7 @@ export function useChatSession(chatId: string | null) {
           return COMMITMENT_ACCEPTED_COIN_BONUS
         })
         toastSuccess(
-          `${target.card.name} said yes — you're ${formatCommitmentStatus(tier)} now. ${outcome.reason}${coinsGranted ? ` (+${coinsGranted} coins)` : ''}`,
+          `${target.card.name} said yes, you're ${formatCommitmentStatus(tier)} now. ${outcome.reason}${coinsGranted ? ` (+${coinsGranted} coins)` : ''}`,
           { chime: true },
         )
         chatFactsApi
@@ -2392,6 +2485,10 @@ export function useChatSession(chatId: string | null) {
       const activeSwipe = freshMsg.activeSwipe ?? 0
       const currentScene: SceneTag = freshMsg.swipeScenes?.[activeSwipe] ?? freshMsg.scene ?? {}
       if (!currentScene.expression) return
+      // Only a tag repeating last turn's is suspect; a changed one was chosen on purpose.
+      const earlier = messages.filter((m) => m.role === 'char' && m.id !== messageId && m.name === speaker.card.name)
+      const priorExpression = earlier[earlier.length - 1]?.scene?.expression
+      if (priorExpression && priorExpression !== currentScene.expression) return
 
       const candidates = expressionCandidatesFor(unlockedExpressions, speaker.customExpressions)
       const corrected = await detectExpressionTextMismatch(client, {
@@ -2414,7 +2511,7 @@ export function useChatSession(chatId: string | null) {
       swipeScenes[activeSwipe] = sanitized
       await messagesApi.update(messageId, { scene: sanitized, swipeScenes })
     },
-    [chat?.affection, chat?.sceneFlags, client, world],
+    [chat?.affection, chat?.sceneFlags, client, messages, world],
   )
 
   const runGeneration = useCallback(
@@ -2478,7 +2575,7 @@ export function useChatSession(chatId: string | null) {
 
           // Budget was already tight this turn — fold overflow into the summary and rebuild now rather than after the reply lands.
           if (autoSummarize && built.excludedMessageCount > 0) {
-            await updateMemorySummary({ force: true })
+            await updateMemorySummary({ force: true, history: currentHistory })
             const rebuilt = await buildCurrentPrompt(currentHistory, {
               continueLastTurn: continuing,
               speakerId: opts?.speakerId,
@@ -2503,6 +2600,7 @@ export function useChatSession(chatId: string | null) {
           let firstTokenAt: number | null = null
           let streamedTokenCount = 0
           const builtForStats = built
+          const uiThrottle = createTrailingThrottle(STREAM_UI_INTERVAL_MS)
           let newText = ''
           try {
             newText = await client.generateStream(
@@ -2523,19 +2621,25 @@ export function useChatSession(chatId: string | null) {
                 const now = performance.now()
                 if (firstTokenAt === null) firstTokenAt = now
                 streamedTokenCount++
-                setStreamingText(accumulated + stripSceneTagForDisplay(full))
                 const elapsedSec = (now - firstTokenAt) / 1000
-                setGenStats({
+                const stats = {
                   tokensPerSec: elapsedSec > 0 ? streamedTokenCount / elapsedSec : 0,
                   firstTokenMs: firstTokenAt - genStartedAt,
                   contextUsed: builtForStats.tokensUsed,
                   contextBudget: builtForStats.contextBudget,
                   measured: false,
+                }
+                // One render per interval instead of one per token; the latest text always wins.
+                uiThrottle.schedule(() => {
+                  setStreamingText(accumulated + stripSceneTagForDisplay(full))
+                  setGenStats(stats)
                 })
               },
               abort.signal,
             )
+            uiThrottle.flush()
           } catch (streamErr) {
+            uiThrottle.cancel()
             // Some builds/proxies block SSE — fall back to non-streaming.
             console.warn('Streaming generation failed, falling back to non-streaming:', streamErr)
             newText = await client.generate(
@@ -2567,6 +2671,7 @@ export function useChatSession(chatId: string | null) {
             })
           }
 
+          recordCompute({ label: 'Reply', ms: performance.now() - genStartedAt, promptChars: built.prompt.length, outChars: newText.length })
           const combinedRaw = (accumulated + newText).trimEnd()
           const unlockedExpressions = getUnlockedExpressionIds(character, chat.affection ?? 0)
           const unlockedBackgrounds = getUnlockedBackgroundIds(world, chat.affection ?? 0)
@@ -2578,7 +2683,7 @@ export function useChatSession(chatId: string | null) {
           )
           const { text: extractedText, scene: parsedScene } = extractSceneTag(combinedRaw)
           // Scrubbed before storing so a tell doesn't get fed back and imitated next turn. `combinedRaw` keeps the raw original for the Prompt Inspector's toggle.
-          combined = cleanModelOutput(extractedText, { charName: speaker.card.name, personaName: persona?.name || 'You' })
+          combined = cleanModelOutput(extractedText, { charName: speaker.card.name, personaName: persona?.name || 'You', replaceEmDashes })
           scene = sanitizeSceneTag(parsedScene, unlockedExpressions, unlockedBackgrounds, selectableOutfits)
           // Catches the model echoing recent history back as a "fresh" reply (tail-end repeat, concatenated turns, or a copy of the player's own line).
           const recentTextsForDuplicateCheck = historyForPrompt.slice(-6).map((m) => m.text)
@@ -2861,7 +2966,7 @@ export function useChatSession(chatId: string | null) {
           runAssist('tasks', 'Checking objective', () => detectAndMarkTasks(chat.id, combined))
         }
         if (autoSummarize) {
-          runAssist('summary', 'Updating memory', () => updateMemorySummary())
+          runAssist('summary', 'Updating memory', () => updateMemorySummary({ history: relationshipHistory }))
         }
         if (visionSceneDetection) {
           runAssist('vision', 'Reading the scene', () => refineSceneWithVision(targetMessageId, speaker, combined, images))
@@ -3406,7 +3511,7 @@ export function useChatSession(chatId: string | null) {
     // Same empty/echo/duplicate guard the char-turn pipeline uses for `isUsableReply`.
     const recentTexts = historyForPrompt.slice(-6).map((m) => m.text)
     if (!cleaned.trim() || isVerbatimEcho(cleaned, historyForPrompt[historyForPrompt.length - 1]?.text) || isDuplicateOfRecentText(cleaned, recentTexts)) {
-      throw new Error("Couldn't come up with a suggestion that fit — try again.")
+      throw new Error("Couldn't come up with a suggestion that fit, try again.")
     }
     return cleaned
   }, [buildCurrentPrompt, character, chat, client, messages, persona?.name, sampler])
@@ -3423,7 +3528,7 @@ export function useChatSession(chatId: string | null) {
       // Explicitly a deliberate change FROM whatever was happening, not a continuation — a drafted action can otherwise drift back onto the prior beat instead of the one actually clicked.
       const directive = [
         `${personaName} is choosing to do exactly this, right now: ${resolveIntimacyPromptNote(option, charName)}.`,
-        `This is a deliberate change FROM whatever was just happening in the scene, not a continuation of it — write ${personaName} actually transitioning into THIS specific action. The current mood, position, and what everyone is or isn't wearing are still there to adapt the transition around, never a reason to keep doing the previous act instead of this one.`,
+        `This is a deliberate change FROM whatever was just happening in the scene, not a continuation of it, write ${personaName} actually transitioning into THIS specific action. The current mood, position, and what everyone is or isn't wearing are still there to adapt the transition around, never a reason to keep doing the previous act instead of this one.`,
         `One to three sentences, present tense, in ${personaName}'s voice. Actions in *asterisks*, anything said aloud in "quotes".`,
         `A starting point, only if it helps: ${composeIntimacyActionText(option, charName)}`,
       ].join(' ')
@@ -3512,7 +3617,7 @@ export function useChatSession(chatId: string | null) {
           await chatsApi.update(chatId, { giftCoins: Math.max(0, (liveChat.giftCoins ?? 0) + OBJECTIVE_COMPLETE_COIN_BONUS) })
           return OBJECTIVE_COMPLETE_COIN_BONUS
         })
-        if (coinsGranted) toastSuccess(`Objective complete — +${coinsGranted} coins`, { chime: true })
+        if (coinsGranted) toastSuccess(`Objective complete, +${coinsGranted} coins`, { chime: true })
       }
     },
     [activeObjective, chatId],
@@ -3558,7 +3663,7 @@ export function useChatSession(chatId: string | null) {
         // spend entirely — the player didn't choose to spend a day's action on this, so it
         // shouldn't cost one, and it must not silently fail to fire just because today's are gone.
         if (!event.free && getEnergyRemaining(day, phaseIndex) <= 0) {
-          toastError(`No energy left today — get some rest before starting another ${event.kind === 'hangout' ? 'hangout' : 'date'}.`)
+          toastError(`No energy left today, get some rest before starting another ${event.kind === 'hangout' ? 'hangout' : 'date'}.`)
           return
         }
         if (character) {
@@ -3582,7 +3687,7 @@ export function useChatSession(chatId: string | null) {
           if (chat?.scene?.timePhase) await chatsApi.update(chatId, { scene: { ...chat.scene, timePhase: null } })
           if (result.slept) {
             const weather = getWeather(world.id, result.day)
-            toastSuccess(`Tired after a full day, you call it a night. A new morning dawns — ${describeWeather(weather)}.`)
+            toastSuccess(`Tired after a full day, you call it a night. A new morning dawns, ${describeWeather(weather)}.`)
           }
         }
       }
@@ -3614,7 +3719,7 @@ export function useChatSession(chatId: string | null) {
         const sceneNoun = event.kind === 'hangout' ? 'hangout' : 'date'
         // The lock claim doubles as a liveness check: another generation could still be in flight, and runGeneration's shared refs can't run two at once.
         if (!beginGeneration()) {
-          toastInfo(`${event.title} has started — ${character.card.name} will pick it up as soon as the current reply finishes, or send a message yourself.`)
+          toastInfo(`${event.title} has started, ${character.card.name} will pick it up as soon as the current reply finishes, or send a message yourself.`)
         } else {
           try {
             const openerId = newId()
@@ -3802,7 +3907,7 @@ export function useChatSession(chatId: string | null) {
         const weather = getWeather(world.id, result.day)
         toastSuccess(
           result.slept
-            ? `You call it a night. A new morning dawns — ${describeWeather(weather)}.`
+            ? `You call it a night. A new morning dawns, ${describeWeather(weather)}.`
             : `You take some time to rest and recharge.`,
         )
         return
@@ -3821,7 +3926,7 @@ export function useChatSession(chatId: string | null) {
       try {
         const forked = await chatsApi.fork(chatId, messageId)
         setActiveChatId(forked.id)
-        toastSuccess('Forked into a new chat — the original is untouched.')
+        toastSuccess('Forked into a new chat, the original is untouched.')
       } catch (e) {
         toastError(errorMessage(e))
       }

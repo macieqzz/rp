@@ -59,13 +59,13 @@ export function needGuidance(charName: string, need?: CharacterNeed): string {
 /** Names a private, concrete thing the character currently wants — mirrors the player-facing Objective system, but hidden. */
 export function characterIntentGuidance(charName: string, intent?: string): string {
   if (!intent) return ''
-  return `${charName} is privately holding onto something right now: ${intent}. It can quietly shape what they say or do, but they don't have to act on it or announce it this exact turn. Every so often it's fine for this to surface as a small, unexplained action instead of only a shift in word choice — texting first out of nowhere, bringing it up with no obvious lead-in, quietly doing something about it off-screen — not just coloring tone.`
+  return `${charName} is privately holding onto something right now: ${intent}. It can quietly shape what they say or do, but they don't have to act on it or announce it this exact turn. Every so often it's fine for this to surface as a small, unexplained action instead of only a shift in word choice, texting first out of nowhere, bringing it up with no obvious lead-in, quietly doing something about it off-screen, not just coloring tone.`
 }
 
 /** Names a deeper, steadier drive — the want-axis counterpart to `needGuidance`'s emotional axis. */
 export function desireGuidance(charName: string, desire?: string): string {
   if (!desire) return ''
-  return `Underneath the specific things ${charName} wants day to day, there's something deeper and steadier driving them right now: ${desire}. It isn't on today's agenda the way a concrete want would be, and it doesn't need satisfying or even naming this turn — but it can quietly shape what draws their attention, what rings true to them, or what they gravitate toward when nothing more pressing is going on.`
+  return `Underneath the specific things ${charName} wants day to day, there's something deeper and steadier driving them right now: ${desire}. It isn't on today's agenda the way a concrete want would be, and it doesn't need satisfying or even naming this turn, but it can quietly shape what draws their attention, what rings true to them, or what they gravitate toward when nothing more pressing is going on.`
 }
 
 /** Names a private fear — explains defensiveness/avoidance in a way mood/need don't on their own. */
@@ -104,9 +104,9 @@ export function authoredStatePriorityNote(
     .filter(Boolean)
     .join(' and ')
   const boundaryClause = hasAuthoredBoundaries
-    ? ` This includes ${charName}'s own authored boundaries — those are not softened by how warm things generally are.`
+    ? ` This includes ${charName}'s own authored boundaries, those are not softened by how warm things generally are.`
     : ''
-  return `${charName} is ${because}. A generic romance story would have a character soften, lean in, or escalate anyway just because the moment invites it — resist that trained instinct here. ${charName}'s actual authored state wins over generic romantic instinct: however high warmth or affection reads right now, it does not override a mood like this, an unmet need, or what ${charName} is actually doing right now.${boundaryClause} Write the character who is actually anxious/guarded/holding back, not the version of this scene a stock romance would write.`
+  return `${charName} is ${because}. A generic romance story would have a character soften, lean in, or escalate anyway just because the moment invites it, resist that trained instinct here. ${charName}'s actual authored state wins over generic romantic instinct: however high warmth or affection reads right now, it does not override a mood like this, an unmet need, or what ${charName} is actually doing right now.${boundaryClause} Write the character who is actually anxious/guarded/holding back, not the version of this scene a stock romance would write.`
 }
 
 // Stock romance-writing tells a model reaches for regardless of character/relationship. This is the
@@ -139,13 +139,13 @@ export function stockRomancePhrasingNote(isRomanticMoment: boolean, recentCharTu
   const recent = recentCharTurns.join('\n').toLowerCase()
   const phrases = STOCK_ROMANCE_PHRASES.filter((p) => !recent.includes(p.toLowerCase()))
   if (phrases.length === 0) return ''
-  return `This is a romantic/intimate moment, which is exactly where a model's own generic training shows up hardest. Avoid reaching for stock romance-writing tells here regardless of whether they've come up before in this chat — things like "${phrases.join('", "')}". Write what's actually specific to this character and this moment instead of the generic version of a romance scene.`
+  return `This is a romantic/intimate moment, which is exactly where a model's own generic training shows up hardest. Avoid reaching for stock romance-writing tells here regardless of whether they've come up before in this chat, things like "${phrases.join('", "')}". Write what's actually specific to this character and this moment instead of the generic version of a romance scene.`
 }
 
 /** POV guard: only the player's own actions belong to the player. Fires on any romantic/intimate moment, not just an active catalog-driven `IntimacyScene` — covers freeform-only intimacy too. */
 export function agencyGuardNote(isRomanticMoment: boolean, charName: string, userName: string): string {
   if (!isRomanticMoment) return ''
-  return `${userName}'s actions, words, thoughts, and choices are ${userName}'s alone. Write ${charName}'s side of this and stop there: what ${charName} does, what they say, what they notice. Never move ${userName}, answer for them, or state what they felt, not even in a half-sentence aside like "you shiver" or "you can't help smiling" — that half-sentence is the one that breaks the scene, because it decides something that was ${userName}'s to decide.`
+  return `${userName}'s actions, words, thoughts, and choices are ${userName}'s alone. Write ${charName}'s side of this and stop there: what ${charName} does, what they say, what they notice. Never move ${userName}, answer for them, or state what they felt, not even in a half-sentence aside like "you shiver" or "you can't help smiling", that half-sentence is the one that breaks the scene, because it decides something that was ${userName}'s to decide.`
 }
 
 /** Emotional-aftermath guidance for the afterglow window (`dating/aftercare.ts`). Splits at the first turn (the immediate beat reads differently from the hours after). Never names physical detail — that's the content dial's job. */
@@ -157,7 +157,7 @@ export function afterglowGuidance(
 ): string {
   const because = sourceLabel ? ` (after ${sourceLabel})` : ''
   if (turnsSince <= 0) {
-    return `${charName} and ${userName} have just been intimate${because}. This is the moment immediately after: ${charName} is more open and more exposed than usual, and whatever they do now — reaching for ${userName}, retreating, deflecting with a joke, needing to be told something — should come from who they actually are, not from a generic tenderness. Being this uncovered is not automatically comfortable for them.`
+    return `${charName} and ${userName} have just been intimate${because}. This is the moment immediately after: ${charName} is more open and more exposed than usual, and whatever they do now, reaching for ${userName}, retreating, deflecting with a joke, needing to be told something, should come from who they actually are, not from a generic tenderness. Being this uncovered is not automatically comfortable for them.`
   }
-  return `${charName} and ${userName} were intimate a short while ago${because}. It hasn't stopped mattering: it can still sit under ordinary conversation as ease, self-consciousness, a need for reassurance, or a wish not to discuss it. Let it colour how ${charName} reads ${userName}'s attention right now — especially its absence — without narrating the scene again.`
+  return `${charName} and ${userName} were intimate a short while ago${because}. It hasn't stopped mattering: it can still sit under ordinary conversation as ease, self-consciousness, a need for reassurance, or a wish not to discuss it. Let it colour how ${charName} reads ${userName}'s attention right now, especially its absence, without narrating the scene again.`
 }

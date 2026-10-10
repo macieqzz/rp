@@ -66,7 +66,7 @@ describe('summarizeMessages', () => {
     const prompt = input.generate.mock.calls[0][0] as string
     expect(prompt).toContain('no em dashes')
     expect(prompt).toContain('under 450 words')
-    expect(prompt).toContain("Do not invent anything that didn't happen above.")
+    expect(prompt).toContain("Do not invent anything that didn't happen below.")
   })
 
   it('trims and returns the generated result', async () => {

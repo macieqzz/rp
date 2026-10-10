@@ -35,6 +35,12 @@ npm test            # run the suite once
 npm run test:watch  # watch mode
 ```
 
+### Keeping long chats cheap on a local GPU
+
+Launch KoboldCpp with `--smartcache 6` so background checks stop erasing the chat's cache, and leave Settings → Generation →
+"Reuse the model's cache between turns" on. Measured numbers, what did and didn't help, and how to check it are in
+[EFFICIENCY.md](EFFICIENCY.md).
+
 ### Docker
 
 ```bash

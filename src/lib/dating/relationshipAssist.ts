@@ -58,6 +58,12 @@ function recentText(history: ChatMessage[], charName: string, userName: string, 
     .join('\n')
 }
 
+/** The history handed to the judge already ends with the reply it is asked about, which is quoted separately right after; drop the copy. */
+function withoutTrailingReply(history: ChatMessage[], latestReply: string): ChatMessage[] {
+  const last = history[history.length - 1]
+  return last && last.role !== 'user' && last.text.trim() === latestReply.trim() ? history.slice(0, -1) : history
+}
+
 export type RelationshipDeltaKey = 'affection' | RelationshipDimension
 export type RelationshipDeltas = Record<RelationshipDeltaKey, number>
 
@@ -79,7 +85,7 @@ const FLAG_GLOSSARY: Record<SceneFlag, string> = {
   confession: 'one of them stated real romantic feelings out loud, not just flirted or hinted',
   jealousy: 'clear jealousy or possessiveness was shown over a rival or another relationship',
   promise: 'a specific, meaningful promise was made that the story should remember later',
-  first_kiss: 'they actually kissed — lips meeting mouth, forehead, cheek, hand, or anywhere else — not just closeness, a lingering look, or an almost-kiss that did not quite happen',
+  first_kiss: 'they actually kissed, lips meeting mouth, forehead, cheek, hand, or anywhere else, not just closeness, a lingering look, or an almost-kiss that did not quite happen',
 }
 
 /** Flags a hangout can never establish — withheld from its classifier menu and stripped if the model sets one anyway. Built-ins only. */
@@ -272,13 +278,46 @@ export async function assessRelationshipMoment(
     : ''
   const prompt = [
     'You are scoring relationship momentum, tracking high-level romance route flags, noting durable facts worth remembering long-term, AND (separately) reading the character\'s own current emotional state, an underlying need, and private intentions, in an in-character roleplay.',
-    `Current scores (0-100 each): ${DELTA_KEYS.map((k) => `${k}=${params.current[k]}`).join(', ')}.`,
-    `Recent context:\n${recentText(params.history, params.charName, params.userName, 8)}`,
-    `Latest reply from ${params.charName}:\n${params.latestReply}`,
     `Dimension meanings: ${DELTA_KEYS.map((k) => `${k} = ${DIMENSION_GLOSSARY[k]}`).join('; ')}.`,
     `Known route flags: ${describeFlags(params.customFlags)}.`,
+    `Return ONLY a minified JSON object: {"deltas":{ one integer -2..2 per dimension key },"newFlags":[ any newly-established flags from the known set, or [] ],"reason":"...","newFacts":[ any new durable facts, or [] ]${hasOpenThreads ? ',"resolvedFactIndices":[ open-thread index numbers this exchange clearly closed, or [] ]' : ''}${hasTasks ? ',"completedTaskIndices":[ pending task index numbers this exchange clearly and unambiguously accomplished, or [] ]' : ''}${hasAftercare ? `,"aftercareVerdict":"exactly one of [${AFTERCARE_VERDICTS.join(', ')}]"` : ''}${hasIntimacyScene ? `,"intimacyObservation":{"engagement":"one of [engaged, stalled, drifted]","intensityDelta":-1|0|1|2,"hesitationSignalled":true/false,"stageCompleteSignalled":true/false,"regionsTouched":[ zero or more of the region names listed below ],"clothingRemoved":[ zero or more {"who":"char"|"user","layer":"one of the layer names listed below"} ]${hasSharedScene ? ',"contact":[ zero or more {"actor":"...","target":"...","region":"..."} ],"participantClothingRemoved":[ zero or more {"who":"a character id","layer":"..."} ]' : ''}}` : ''},"mood":"one of [${MOOD_VOCAB.join(', ')}], only if this exchange gives a clear enough read to state one, omit entirely otherwise","currentNeed":"one of [${NEED_VOCAB.join(', ')}], only if this stretch of the story clearly shows this need going unmet, omit entirely otherwise, and don't change it lightly","characterIntent":"a short (under 12 words) private thing ${params.charName} now wants, only if something concrete and new became clear this exchange, omit entirely otherwise","currentDesire":"a short (under 12 words) deeper, steadier underlying drive of ${params.charName}'s, only if this exchange makes one genuinely clear, omit entirely otherwise, and don't change it lightly","currentFear":"a short (under 12 words) private fear ${params.charName} has right now, only if this exchange makes one genuinely clear, omit entirely otherwise, and don't change it lightly","planUpdates":[ usually [], see the plan rules below ],"beliefUpdates":[ usually [], see the belief rules below ],"expectationUpdates":[ usually [], see the expectation rules below ]}.`,
+    'Only move a dimension if this specific exchange clearly affected it. Leave the rest at 0. Most turns should move only one or two dimensions and add no new flags.',
+    '"reason" is a short (under 12 words) in-world one-liner naming what just happened, e.g. "Complimented their cooking unprompted". Give one only if at least one dimension moved or a flag was added, otherwise "".',
+    `"newFacts" is for concrete, durable things worth recalling much later: a name, a stated preference, a piece of backstory, a promise made, a moment that landed hard. Not every line of dialogue. Most turns add none. Each fact is an object {"text": one short standalone sentence, "importance": 0-1, "valence": -1 to 1, "unresolved": true/false}. "importance": ~0.2 for a small detail, 0.8+ for something that reshapes how ${params.charName} sees ${params.userName}. "valence": how it felt to ${params.charName}, negative if it hurt or disappointed, positive if it meant a lot, 0 for neutral information. "unresolved": true only for an open wound or open question the story has NOT closed (a slight not addressed, a promise not yet kept, a question dodged), most facts are false.`,
+    hasOpenThreads
+      ? '"resolvedFactIndices" lists open-thread indices from the list above that this exchange clearly closed, an apology that landed, a promise kept, a dodged question finally answered. Be conservative: [] unless it plainly happened this turn.'
+      : '',
+    `"mood" is ${params.charName}'s own transient emotional state right now, independent of the relationship dimensions above, a close, trusted relationship can still have an "annoyed" or "exhausted" day. Omit it on most turns; only state one when this exchange actually gave a clear signal, and don't just repeat the current mood back for no reason.`,
+    `"currentNeed" is steadier than mood, a psychological undercurrent this stretch of the story hasn't been meeting (e.g. "reassurance" after being flaky, "recognition" after going unnoticed, "solitude" after being crowded). Omit it almost every turn; it shouldn't flip as readily as mood does, and should only be set or changed on a genuinely clear, sustained signal, not one line of dialogue.`,
+    `"characterIntent" is a private thing ${params.charName} wants that the player hasn't necessarily been told, a small hidden agenda that can quietly color future turns (wanting reassurance, wanting space, planning a surprise, wanting an apology first). Omit it on almost every turn; once set it should usually stay omitted (meaning "no change") for a while rather than being reset every exchange.`,
+    `"currentDesire" is deeper and steadier than "characterIntent" the same way "currentNeed" is deeper and steadier than "mood", not a specific plan or agenda item, but a foundational underlying drive that doesn't change turn to turn (e.g. "wants to feel truly seen, not just liked", "wants to matter to someone again", "wants to be the one chosen, not settled for"). Omit it on almost every turn; once set it should stay omitted (meaning "no change") for a long while, longer even than "characterIntent" does.`,
+    `"planUpdates" changes ${params.charName}'s standing plans, bigger and longer-lived than "characterIntent": a real intention that spans many turns and can be entirely about ${params.charName}'s own life. Each entry is one of: {"action":"add","goal":"short, in ${params.charName}'s own terms","kind":"personal"|"together"|"distance","note":"optional"} to form a new one; {"action":"note","index":N,"note":"..."} to record progress or a setback on plan N; {"action":"resolve","index":N} to close plan N (finished, abandoned, or overtaken by events). "personal" = ${params.charName}'s own life independent of ${params.userName}; "together" = something they want to do with ${params.userName}; "distance" = deliberately holding back or protecting themselves. Use [] on almost every turn. Only "add" when this exchange genuinely gave ${params.charName} a new reason to want something lasting, a plan formed on a whim and never mentioned again is noise. Resolve a plan the moment the story has clearly moved past it.`,
+    `"beliefUpdates" changes ${params.charName}'s standing impressions of ${params.userName} as a person, a judgment about who ${params.userName} *is*, not a one-off event (that's "newFacts") and not a relationship stat. Each entry is one of: {"action":"add","text":"the impression in ${params.charName}'s own voice, e.g. 'They're unusually patient with me.'"} to form a new one; {"action":"revise","index":N,"text":"..."} to correct or sharpen belief N once it's proven wrong or too simple; {"action":"drop","index":N} to abandon one that's been clearly disproven. Use [] on almost every turn, only add one when this exchange gives real, repeated-pattern evidence, not from a single isolated moment.`,
+    `"expectationUpdates" changes ${params.charName}'s standing expectations of ${params.userName}, something ${params.charName} has started quietly counting on, whether or not ${params.userName} has ever been told. Each entry is one of: {"action":"add","text":"the expectation, e.g. 'expects a check-in most Sundays'"}; {"action":"note","index":N,"note":"..."} to record it playing out; {"action":"resolve","index":N,"outcome":"met"|"violated"} once it's clearly been met or clearly been missed. Use [] on almost every turn. "violated" should be reserved for a real, noticeable letdown, not a trivial miss.`,
+    hasAftercare
+      ? `"aftercareVerdict" judges only how ${params.userName} treated ${params.charName} in the turns since they were intimate. "tender" = stayed present and warm, gave reassurance or closeness, took ${params.charName} seriously. "cold" = pulled away, went distant or dismissive, changed the subject, or acted as if it had not happened. "awkward" = anything in between, including a fumbled or self-conscious aftermath that was still well meant. Judge ${params.userName}'s behaviour, not ${params.charName}'s, and not whether the intimacy itself went well. Most aftermaths are "awkward", reserve "cold" for a real, visible withdrawal, not merely for a quiet stretch.`
+      : '',
+    hasTasks
+      ? 'Be conservative about "completedTaskIndices": only include a task index if this exchange plainly and unambiguously accomplished it, not if it merely became more likely. Use [] if none did.'
+      : '',
+    hasIntimacyScene
+      ? `"intimacyObservation" describes only what this one reply did, every field is an observation about the text in front of you, never a judgement about where the scene should go. "engagement": "engaged" if the reply actually carried the current physical activity forward; "stalled" if it went nowhere (talk, hesitation, repeating the previous beat); "drifted" if it moved to something else entirely. "intensityDelta": -1 if this reply pulled back from the previous one, 0 if it held level, 1 for a normal step up, 2 only for a large, unmistakable escalation. "hesitationSignalled": true if either of them paused, checked in, or visibly held back. "stageCompleteSignalled": true only if this reply narrated the scene actually finishing, not merely nearing it. "regionsTouched": the regions this reply described contact with, drawn only from [${BODY_REGIONS.join(', ')}], or [] if none were described. "clothingRemoved": anything this reply described actually coming off, as {"who":"char" for ${params.charName} or "user" for ${params.userName}, "layer": one of [${CLOTHING_LAYERS.join(', ')}]}, only garments removed in THIS reply, not ones already off, and [] on most turns.${
+          hasSharedScene
+            ? ` More than one character is in this scene, so "regionsTouched" can no longer say whose body it means: leave it empty and describe every contact in "contact" instead, including ${params.charName}'s own. "contact": every contact this reply described, as {"actor","target","region"} where actor and target are each one of [${contactActors}] and region is one of the region names listed above, describe contact that is *currently happening*, not something that ended, since the app carries this forward as what is still true. Omit a contact rather than guessing at one. "participantClothingRemoved": anything coming off, as {"who":"a character id from the list above","layer":"..."}, the same THIS-reply-only rule.`
+            : ''
+        }`
+      : '',
+    `Example (nothing much happened): {"deltas":{"affection":1,"comfort":1},"reason":"Stayed to help clean up without being asked"}`,
+    `Example (a fact landed hard): {"deltas":{"affection":-2,"trust":-1,"comfort":-1,"tension":2},"reason":"Forgot their birthday entirely","newFacts":[{"text":"Forgot ${params.charName}'s birthday","importance":0.75,"valence":-0.7,"unresolved":true}]${hasOpenThreads ? ',"resolvedFactIndices":[]' : ''}}`,
+    `Example (a plan forms, ${params.charName} decides on something lasting): {"deltas":{"trust":1,"respect":1},"reason":"Opened up about the gallery showcase deadline","planUpdates":[{"action":"add","goal":"finish the mural before the showcase","kind":"personal","note":"three weeks out, behind on it"}]}`,
+    `Example (a pattern becomes a real impression, and an expectation is broken): {"deltas":{"affection":-1,"comfort":-1,"tension":1},"reason":"Third Sunday in a row with no check-in","beliefUpdates":[{"action":"add","text":"They mean well but tend to go quiet when things get busy for them."}],"expectationUpdates":[{"action":"resolve","index":0,"outcome":"violated"}]}`,
+    'Return only keys that carry information this turn: leave out "newFlags", "newFacts", "planUpdates", "beliefUpdates", "expectationUpdates", the optional state fields, and every delta that is 0, rather than writing them out empty.',
+    '--- The exchange to judge ---',
+    `Current scores (0-100 each): ${DELTA_KEYS.map((k) => `${k}=${params.current[k]}`).join(', ')}.`,
+    `Recent context:\n${recentText(withoutTrailingReply(params.history, params.latestReply), params.charName, params.userName, 8)}`,
+    `Latest reply from ${params.charName}:\n${params.latestReply}`,
     hasOthersPresent
-      ? `Also actually present and speaking in this scene right now: ${params.presentParticipants!.join(', ')}. If jealousy is genuinely building, someone else being physically here for it to happen in front of is a stronger, more concrete signal than the same feeling from a conversation or a memory alone — weigh that when deciding whether "jealousy" is established this exchange.`
+      ? `Also actually present and speaking in this scene right now: ${params.presentParticipants!.join(', ')}. If jealousy is genuinely building, someone else being physically here for it to happen in front of is a stronger, more concrete signal than the same feeling from a conversation or a memory alone, weigh that when deciding whether "jealousy" is established this exchange.`
       : '',
     substituteMacros(describeIntentForJudge(params.intent) ?? '', { charName: params.charName, userName: params.userName }),
     params.knownFacts?.length ? `Facts already remembered (don't repeat these): ${params.knownFacts.join('; ')}.` : '',
@@ -287,63 +326,33 @@ export async function assessRelationshipMoment(
       : '',
     hasTasks ? `Pending objective tasks:\n${params.pendingTasks!.map((t, i) => `${i}: ${t}`).join('\n')}` : '',
     hasAftercare
-      ? `Separately: ${params.charName} and ${params.userName} were intimate a few turns ago, and you are also judging how the time SINCE went for ${params.charName} — the aftermath, not the act. Everything said since:\n${recentText(params.aftercareTurns!, params.charName, params.userName, 24)}`
+      ? `Separately: ${params.charName} and ${params.userName} were intimate a few turns ago, and you are also judging how the time SINCE went for ${params.charName}, the aftermath, not the act. Everything said since:\n${recentText(params.aftercareTurns!, params.charName, params.userName, 24)}`
       : '',
     hasAftercare && params.aftercarePaceContext
       ? params.aftercarePaceContext === 'rushed'
-        ? `Context for the aftercare verdict only: this arrived fast — either the scene itself was over almost as soon as it started, or the warmth that led there spiked right beforehand rather than accumulating over many turns. A milestone that arrived this fast is more plausibly followed by second-guessing, self-consciousness, or a colder reaction than one that was clearly earned — weigh that honestly, though the actual behaviour in the turns since should still be what decides the verdict.`
-        : `Context for the aftercare verdict only: this was earned — the scene took its time, and the warmth that led there built up over many small moments rather than spiking. That's the more solid foundation for a genuinely tender aftermath, though it's still the actual behaviour in the turns since that should decide the verdict.`
+        ? `Context for the aftercare verdict only: this arrived fast, either the scene itself was over almost as soon as it started, or the warmth that led there spiked right beforehand rather than accumulating over many turns. A milestone that arrived this fast is more plausibly followed by second-guessing, self-consciousness, or a colder reaction than one that was clearly earned, weigh that honestly, though the actual behaviour in the turns since should still be what decides the verdict.`
+        : `Context for the aftercare verdict only: this was earned, the scene took its time, and the warmth that led there built up over many small moments rather than spiking. That's the more solid foundation for a genuinely tender aftermath, though it's still the actual behaviour in the turns since that should decide the verdict.`
       : '',
     hasIntimacyScene
-      ? `Separately: an explicit intimate scene is currently in progress (the app currently has it at "${params.currentIntimacyPhase}"). Report what the latest reply actually did, in the "intimacyObservation" fields below — you are describing the turn, not deciding where the scene goes next.${
+      ? `Separately: an explicit intimate scene is currently in progress (the app currently has it at "${params.currentIntimacyPhase}"). Report what the latest reply actually did, in the "intimacyObservation" fields below, you are describing the turn, not deciding where the scene goes next.${
           params.intimacyStance === 'reluctant'
-            ? ` Worth knowing while you read it: this is something ${params.charName} is not actually into, so a hesitation, a pause, or going along with it rather than wanting it is likely to be genuinely present in the reply — look for it rather than assuming enthusiasm.`
+            ? ` Worth knowing while you read it: this is something ${params.charName} is not actually into, so a hesitation, a pause, or going along with it rather than wanting it is likely to be genuinely present in the reply, look for it rather than assuming enthusiasm.`
             : params.intimacyStance === 'eager'
-              ? ` Worth knowing while you read it: this is something ${params.charName} is genuinely eager for, so hesitation is less likely to be what's actually on the page — read what's there rather than assuming reluctance.`
+              ? ` Worth knowing while you read it: this is something ${params.charName} is genuinely eager for, so hesitation is less likely to be what's actually on the page, read what's there rather than assuming reluctance.`
               : ''
         }`
       : '',
     `${params.charName}'s mood going into this exchange: ${params.currentMood ?? 'not yet read'}. Their underlying need lately: ${params.currentNeed ?? 'not yet read'}. Their private intention going in: ${params.currentIntent ?? 'none noted'}. Their deeper underlying desire going in: ${params.currentDesire ?? 'not yet read'}. Their private fear going in: ${params.currentFear ?? 'none noted'}.`,
     hasPlans
-      ? `${params.charName}'s current standing plans — concrete intentions they're carrying between turns, not just this-turn reactions:\n${params.activePlans!.map((p, i) => `${i}: ${p}`).join('\n')}`
+      ? `${params.charName}'s current standing plans, concrete intentions they're carrying between turns, not just this-turn reactions:\n${params.activePlans!.map((p, i) => `${i}: ${p}`).join('\n')}`
       : `${params.charName} has no standing plans on record yet.`,
     hasBeliefs
-      ? `${params.charName}'s standing impressions of ${params.userName} as a person — not the relationship stats, an actual judgment of who ${params.userName} is:\n${params.activeBeliefs!.map((b, i) => `${i}: ${b}`).join('\n')}`
+      ? `${params.charName}'s standing impressions of ${params.userName} as a person, not the relationship stats, an actual judgment of who ${params.userName} is:\n${params.activeBeliefs!.map((b, i) => `${i}: ${b}`).join('\n')}`
       : `${params.charName} hasn't formed any standing impressions of ${params.userName} yet.`,
     hasExpectations
-      ? `${params.charName}'s standing expectations of ${params.userName} — things ${params.charName} has started counting on, whether or not ${params.userName} knows it:\n${params.activeExpectations!.map((e, i) => `${i}: ${e}`).join('\n')}`
+      ? `${params.charName}'s standing expectations of ${params.userName}, things ${params.charName} has started counting on, whether or not ${params.userName} knows it:\n${params.activeExpectations!.map((e, i) => `${i}: ${e}`).join('\n')}`
       : `${params.charName} has no standing expectations of ${params.userName} on record yet.`,
-    `Return ONLY a minified JSON object: {"deltas":{ one integer -2..2 per dimension key },"newFlags":[ any newly-established flags from the known set, or [] ],"reason":"...","newFacts":[ any new durable facts, or [] ]${hasOpenThreads ? ',"resolvedFactIndices":[ open-thread index numbers this exchange clearly closed, or [] ]' : ''}${hasTasks ? ',"completedTaskIndices":[ pending task index numbers this exchange clearly and unambiguously accomplished, or [] ]' : ''}${hasAftercare ? `,"aftercareVerdict":"exactly one of [${AFTERCARE_VERDICTS.join(', ')}]"` : ''}${hasIntimacyScene ? `,"intimacyObservation":{"engagement":"one of [engaged, stalled, drifted]","intensityDelta":-1|0|1|2,"hesitationSignalled":true/false,"stageCompleteSignalled":true/false,"regionsTouched":[ zero or more of the region names listed below ],"clothingRemoved":[ zero or more {"who":"char"|"user","layer":"one of the layer names listed below"} ]${hasSharedScene ? ',"contact":[ zero or more {"actor":"...","target":"...","region":"..."} ],"participantClothingRemoved":[ zero or more {"who":"a character id","layer":"..."} ]' : ''}}` : ''},"mood":"one of [${MOOD_VOCAB.join(', ')}], only if this exchange gives a clear enough read to state one — omit entirely otherwise","currentNeed":"one of [${NEED_VOCAB.join(', ')}], only if this stretch of the story clearly shows this need going unmet — omit entirely otherwise, and don't change it lightly","characterIntent":"a short (under 12 words) private thing ${params.charName} now wants, only if something concrete and new became clear this exchange — omit entirely otherwise","currentDesire":"a short (under 12 words) deeper, steadier underlying drive of ${params.charName}'s, only if this exchange makes one genuinely clear — omit entirely otherwise, and don't change it lightly","currentFear":"a short (under 12 words) private fear ${params.charName} has right now, only if this exchange makes one genuinely clear — omit entirely otherwise, and don't change it lightly","planUpdates":[ usually [] — see the plan rules below ],"beliefUpdates":[ usually [] — see the belief rules below ],"expectationUpdates":[ usually [] — see the expectation rules below ]}.`,
-    'Only move a dimension if this specific exchange clearly affected it. Leave the rest at 0. Most turns should move only one or two dimensions and add no new flags.',
-    '"reason" is a short (under 12 words) in-world one-liner naming what just happened, e.g. "Complimented their cooking unprompted". Give one only if at least one dimension moved or a flag was added, otherwise "".',
-    `"newFacts" is for concrete, durable things worth recalling much later: a name, a stated preference, a piece of backstory, a promise made, a moment that landed hard. Not every line of dialogue. Most turns add none. Each fact is an object {"text": one short standalone sentence, "importance": 0-1, "valence": -1 to 1, "unresolved": true/false}. "importance": ~0.2 for a small detail, 0.8+ for something that reshapes how ${params.charName} sees ${params.userName}. "valence": how it felt to ${params.charName} — negative if it hurt or disappointed, positive if it meant a lot, 0 for neutral information. "unresolved": true only for an open wound or open question the story has NOT closed (a slight not addressed, a promise not yet kept, a question dodged) — most facts are false.`,
-    hasOpenThreads
-      ? '"resolvedFactIndices" lists open-thread indices from the list above that this exchange clearly closed — an apology that landed, a promise kept, a dodged question finally answered. Be conservative: [] unless it plainly happened this turn.'
-      : '',
-    `"mood" is ${params.charName}'s own transient emotional state right now, independent of the relationship dimensions above — a close, trusted relationship can still have an "annoyed" or "exhausted" day. Omit it on most turns; only state one when this exchange actually gave a clear signal, and don't just repeat the current mood back for no reason.`,
-    `"currentNeed" is steadier than mood — a psychological undercurrent this stretch of the story hasn't been meeting (e.g. "reassurance" after being flaky, "recognition" after going unnoticed, "solitude" after being crowded). Omit it almost every turn; it shouldn't flip as readily as mood does, and should only be set or changed on a genuinely clear, sustained signal, not one line of dialogue.`,
-    `"characterIntent" is a private thing ${params.charName} wants that the player hasn't necessarily been told — a small hidden agenda that can quietly color future turns (wanting reassurance, wanting space, planning a surprise, wanting an apology first). Omit it on almost every turn; once set it should usually stay omitted (meaning "no change") for a while rather than being reset every exchange.`,
-    `"currentDesire" is deeper and steadier than "characterIntent" the same way "currentNeed" is deeper and steadier than "mood" — not a specific plan or agenda item, but a foundational underlying drive that doesn't change turn to turn (e.g. "wants to feel truly seen, not just liked", "wants to matter to someone again", "wants to be the one chosen, not settled for"). Omit it on almost every turn; once set it should stay omitted (meaning "no change") for a long while, longer even than "characterIntent" does.`,
-    `"planUpdates" changes ${params.charName}'s standing plans — bigger and longer-lived than "characterIntent": a real intention that spans many turns and can be entirely about ${params.charName}'s own life. Each entry is one of: {"action":"add","goal":"short, in ${params.charName}'s own terms","kind":"personal"|"together"|"distance","note":"optional"} to form a new one; {"action":"note","index":N,"note":"..."} to record progress or a setback on plan N; {"action":"resolve","index":N} to close plan N (finished, abandoned, or overtaken by events). "personal" = ${params.charName}'s own life independent of ${params.userName}; "together" = something they want to do with ${params.userName}; "distance" = deliberately holding back or protecting themselves. Use [] on almost every turn. Only "add" when this exchange genuinely gave ${params.charName} a new reason to want something lasting — a plan formed on a whim and never mentioned again is noise. Resolve a plan the moment the story has clearly moved past it.`,
-    `"beliefUpdates" changes ${params.charName}'s standing impressions of ${params.userName} as a person — a judgment about who ${params.userName} *is*, not a one-off event (that's "newFacts") and not a relationship stat. Each entry is one of: {"action":"add","text":"the impression in ${params.charName}'s own voice, e.g. 'They're unusually patient with me.'"} to form a new one; {"action":"revise","index":N,"text":"..."} to correct or sharpen belief N once it's proven wrong or too simple; {"action":"drop","index":N} to abandon one that's been clearly disproven. Use [] on almost every turn — only add one when this exchange gives real, repeated-pattern evidence, not from a single isolated moment.`,
-    `"expectationUpdates" changes ${params.charName}'s standing expectations of ${params.userName} — something ${params.charName} has started quietly counting on, whether or not ${params.userName} has ever been told. Each entry is one of: {"action":"add","text":"the expectation, e.g. 'expects a check-in most Sundays'"}; {"action":"note","index":N,"note":"..."} to record it playing out; {"action":"resolve","index":N,"outcome":"met"|"violated"} once it's clearly been met or clearly been missed. Use [] on almost every turn. "violated" should be reserved for a real, noticeable letdown, not a trivial miss.`,
-    hasAftercare
-      ? `"aftercareVerdict" judges only how ${params.userName} treated ${params.charName} in the turns since they were intimate. "tender" = stayed present and warm, gave reassurance or closeness, took ${params.charName} seriously. "cold" = pulled away, went distant or dismissive, changed the subject, or acted as if it had not happened. "awkward" = anything in between, including a fumbled or self-conscious aftermath that was still well meant. Judge ${params.userName}'s behaviour, not ${params.charName}'s, and not whether the intimacy itself went well. Most aftermaths are "awkward" — reserve "cold" for a real, visible withdrawal, not merely for a quiet stretch.`
-      : '',
-    hasTasks
-      ? 'Be conservative about "completedTaskIndices": only include a task index if this exchange plainly and unambiguously accomplished it, not if it merely became more likely. Use [] if none did.'
-      : '',
-    hasIntimacyScene
-      ? `"intimacyObservation" describes only what this one reply did — every field is an observation about the text in front of you, never a judgement about where the scene should go. "engagement": "engaged" if the reply actually carried the current physical activity forward; "stalled" if it went nowhere (talk, hesitation, repeating the previous beat); "drifted" if it moved to something else entirely. "intensityDelta": -1 if this reply pulled back from the previous one, 0 if it held level, 1 for a normal step up, 2 only for a large, unmistakable escalation. "hesitationSignalled": true if either of them paused, checked in, or visibly held back. "stageCompleteSignalled": true only if this reply narrated the scene actually finishing — not merely nearing it. "regionsTouched": the regions this reply described contact with, drawn only from [${BODY_REGIONS.join(', ')}], or [] if none were described. "clothingRemoved": anything this reply described actually coming off, as {"who":"char" for ${params.charName} or "user" for ${params.userName}, "layer": one of [${CLOTHING_LAYERS.join(', ')}]} — only garments removed in THIS reply, not ones already off, and [] on most turns.${
-          hasSharedScene
-            ? ` More than one character is in this scene, so "regionsTouched" can no longer say whose body it means: leave it empty and describe every contact in "contact" instead, including ${params.charName}'s own. "contact": every contact this reply described, as {"actor","target","region"} where actor and target are each one of [${contactActors}] and region is one of the region names listed above — describe contact that is *currently happening*, not something that ended, since the app carries this forward as what is still true. Omit a contact rather than guessing at one. "participantClothingRemoved": anything coming off, as {"who":"a character id from the list above","layer":"..."} — the same THIS-reply-only rule.`
-            : ''
-        }`
-      : '',
-    `Example (nothing much happened): {"deltas":{"affection":1,"trust":0,"chemistry":0,"comfort":1,"respect":0,"curiosity":0,"tension":0},"newFlags":[],"reason":"Stayed to help clean up without being asked","newFacts":[]${hasOpenThreads ? ',"resolvedFactIndices":[]' : ''}${hasTasks ? ',"completedTaskIndices":[]' : ''},"planUpdates":[],"beliefUpdates":[],"expectationUpdates":[]}`,
-    `Example (a fact landed hard): {"deltas":{"affection":-2,"trust":-1,"chemistry":0,"comfort":-1,"respect":0,"curiosity":0,"tension":2},"newFlags":[],"reason":"Forgot their birthday entirely","newFacts":[{"text":"Forgot ${params.charName}'s birthday","importance":0.75,"valence":-0.7,"unresolved":true}]${hasOpenThreads ? ',"resolvedFactIndices":[]' : ''}${hasTasks ? ',"completedTaskIndices":[]' : ''},"planUpdates":[],"beliefUpdates":[],"expectationUpdates":[]}`,
-    `Example (a plan forms — ${params.charName} decides on something lasting): {"deltas":{"affection":0,"trust":1,"chemistry":0,"comfort":0,"respect":1,"curiosity":0,"tension":0},"newFlags":[],"reason":"Opened up about the gallery showcase deadline","newFacts":[]${hasOpenThreads ? ',"resolvedFactIndices":[]' : ''}${hasTasks ? ',"completedTaskIndices":[]' : ''},"planUpdates":[{"action":"add","goal":"finish the mural before the showcase","kind":"personal","note":"three weeks out, behind on it"}],"beliefUpdates":[],"expectationUpdates":[]}`,
-    `Example (a pattern becomes a real impression, and an expectation is broken): {"deltas":{"affection":-1,"trust":0,"chemistry":0,"comfort":-1,"respect":0,"curiosity":0,"tension":1},"newFlags":[],"reason":"Third Sunday in a row with no check-in","newFacts":[]${hasOpenThreads ? ',"resolvedFactIndices":[]' : ''}${hasTasks ? ',"completedTaskIndices":[]' : ''},"planUpdates":[],"beliefUpdates":[{"action":"add","text":"They mean well but tend to go quiet when things get busy for them."}],"expectationUpdates":[{"action":"resolve","index":0,"outcome":"violated"}]}`,
+    'Return the JSON object now, with only the keys that matter.',
     'JSON:',
   ]
     .filter(Boolean)
@@ -362,7 +371,8 @@ export async function assessRelationshipMoment(
   const deltas = { ...ZERO_DELTAS }
   for (const key of DELTA_KEYS) {
     const v = Number(deltasObj[key])
-    deltas[key] = [-2, -1, 0, 1, 2].includes(v) ? v : 0
+    // An overshoot ("-3") is still a clear direction, so clamp it rather than discard the judgement.
+    deltas[key] = Number.isFinite(v) ? Math.max(-2, Math.min(2, Math.round(v))) : 0
   }
   const allowed = allowedFlagIds(params.customFlags)
   const newFlags = Array.isArray(obj.newFlags)
@@ -512,10 +522,10 @@ export async function assessDateOutcome(
   const prompt = [
     `You are scoring how an entire ${sceneNoun}/scene went, in an in-character roleplay: "${params.eventTitle}".`,
     isHangout
-      ? `This is a low-stakes, casual hangout, not a formal date — no dramatic verdict is expected. Keep deltas modest and grounded in genuine warmth, comfort, and trust; reserve anything beyond a small movement for something that actually stood out.`
+      ? `This is a low-stakes, casual hangout, not a formal date, no dramatic verdict is expected. Keep deltas modest and grounded in genuine warmth, comfort, and trust; reserve anything beyond a small movement for something that actually stood out.`
       : '',
     params.walkedOut
-      ? `${params.charName} walked out and ended this early — this is NOT a normal ending. Judge it as a genuinely bad outcome: deltas should be negative on the dimensions this actually hurt, not a token positive bump just because the scene happened.`
+      ? `${params.charName} walked out and ended this early, this is NOT a normal ending. Judge it as a genuinely bad outcome: deltas should be negative on the dimensions this actually hurt, not a token positive bump just because the scene happened.`
       : '',
     `Current scores (0-100 each): ${DELTA_KEYS.map((k) => `${k}=${params.current[k]}`).join(', ')}.`,
     `Full transcript of the ${sceneNoun}:\n${transcriptText || '(nothing was said)'}`,
@@ -523,15 +533,15 @@ export async function assessDateOutcome(
     `Known route flags: ${describeFlags(params.customFlags, excludedFlags)}.`,
     substituteMacros(describeIntentsForDate(params.intents ?? []) ?? '', { charName: params.charName, userName: params.userName }),
     params.hiddenAgenda
-      ? `${params.charName} went into this secretly wanting: ${params.hiddenAgenda} (never told to the other person). Weigh whether the date actually met that, ignored it, or worked against it — but never name "agenda" or break the fourth wall in the recap.`
+      ? `${params.charName} went into this secretly wanting: ${params.hiddenAgenda} (never told to the other person). Weigh whether the date actually met that, ignored it, or worked against it, but never name "agenda" or break the fourth wall in the recap.`
       : '',
     params.knownFacts?.length ? `Facts already remembered (don't repeat these): ${params.knownFacts.join('; ')}.` : '',
     'Return ONLY a minified JSON object: {"deltas":{ one integer -5..5 per dimension key, judged across the WHOLE scene, not per line },"newFlags":[ any newly-established flags from the known set, or [] ],"recap":"...","newFacts":[ any new durable facts, or [] ]}.',
     isHangout
-      ? 'Judge it honestly but gently: an awkward or flat hangout can score near zero, but this almost never needs to go negative the way a bad date would — it takes a real, deliberate hurt to earn a negative delta here.'
+      ? 'Judge it honestly but gently: an awkward or flat hangout can score near zero, but this almost never needs to go negative the way a bad date would, it takes a real, deliberate hurt to earn a negative delta here.'
       : 'Judge the date honestly: a flat, awkward, one-sided, or hurtful date should score low or even negative deltas, not a token positive bump just for happening. A genuinely warm, attentive date should score well across the relevant dimensions.',
     params.walkedOut
-      ? '"recap" must read as the abrupt, in-world exit it was — a line or two on what made {{char}} leave, not a neutral summary.'
+      ? '"recap" must read as the abrupt, in-world exit it was, a line or two on what made {{char}} leave, not a neutral summary.'
       : `"recap" is a short 1-3 sentence in-world summary of how the ${sceneNoun} felt from {{char}}'s side, written for the player to read afterward, not a mechanical report.`,
     '"newFacts" is for concrete, durable things worth recalling much later. Most scenes add one or none. Each is an object {"text": one short sentence, "importance": 0-1, "valence": -1 to 1 (how it felt to {{char}}), "unresolved": true only for an open thread the scene left hanging}.',
     isHangout
@@ -589,9 +599,9 @@ export async function suggestDateEvent(
   const official = params.commitmentStatus && params.commitmentStatus !== 'none' ? params.commitmentStatus : null
   const occasionLine =
     params.milestoneOccasion === 'married'
-      ? 'This card is specifically for the day they get married — draft their actual wedding (the ceremony, the vows, or the moments right around it), not a generic date or anniversary dinner. It should read as the real, once-in-a-relationship milestone it is.'
+      ? 'This card is specifically for the day they get married, draft their actual wedding (the ceremony, the vows, or the moments right around it), not a generic date or anniversary dinner. It should read as the real, once-in-a-relationship milestone it is.'
       : params.milestoneOccasion === 'living_together'
-        ? 'This card is specifically for the day they move in together — draft the actual moving-in day itself (unpacking boxes, the first night in a shared home, making it feel real), not a generic date. It should read as the real, once-in-a-relationship milestone it is.'
+        ? 'This card is specifically for the day they move in together, draft the actual moving-in day itself (unpacking boxes, the first night in a shared home, making it feel real), not a generic date. It should read as the real, once-in-a-relationship milestone it is.'
         : ''
   const prompt = [
     'You design a lightweight dating-sim style event card for a roleplay chat.',
@@ -601,17 +611,17 @@ export async function suggestDateEvent(
     `Current affection: ${params.affection}/100`,
     occasionLine ||
       (official
-        ? `They are already officially ${formatCommitmentStatus(official)}. Suggest something that fits a couple at that stage — an actual date, or something they'd plausibly do together now that it's established — rather than a tentative, getting-to-know-you outing.`
+        ? `They are already officially ${formatCommitmentStatus(official)}. Suggest something that fits a couple at that stage, an actual date, or something they'd plausibly do together now that it's established, rather than a tentative, getting-to-know-you outing.`
         : 'They are not officially together.'),
     params.recentGiftName
-      ? `${params.characterName} was recently given something that genuinely meant something to them: ${params.recentGiftName}. If it fits naturally, the suggested event can plausibly build on or reference that (not force it) — e.g. a shared meal after a favorite-novel gift, or a place that connects to a gift's theme.`
+      ? `${params.characterName} was recently given something that genuinely meant something to them: ${params.recentGiftName}. If it fits naturally, the suggested event can plausibly build on or reference that (not force it), e.g. a shared meal after a favorite-novel gift, or a place that connects to a gift's theme.`
       : '',
     `Available background ids: ${params.availableBackgrounds.join(', ')}`,
     'Return ONLY one minified JSON object:',
     '{"title":"...","description":"...","objectiveTitle":"...","objectiveDescription":"...","backgroundId":"...","kind":"date|hangout|gift|milestone"}',
     occasionLine
-      ? 'This is a milestone occasion, so "kind" should be "date" — treat it as the real, live scene it is.'
-      : '"date" is a real, romantically-charged date. "hangout" is a lower-stakes, casual get-together — friendly, no romantic stakes riding on it, fitting for earlier affection or a deliberately relaxed scene. Pick whichever actually fits the current relationship and mood.',
+      ? 'This is a milestone occasion, so "kind" should be "date", treat it as the real, live scene it is.'
+      : '"date" is a real, romantically-charged date. "hangout" is a lower-stakes, casual get-together, friendly, no romantic stakes riding on it, fitting for earlier affection or a deliberately relaxed scene. Pick whichever actually fits the current relationship and mood.',
     'Make it plausible for the current affection level, with a clear scene objective.',
     'JSON:',
   ]
@@ -659,12 +669,12 @@ export async function draftHiddenAgenda(
   assist?: AssistShaping,
 ): Promise<string | null> {
   const prompt = [
-    `You are drafting a private, hidden motivation for ${params.charName} going into a scene: "${params.eventTitle}". This is NEVER shown to the other person — it is only used afterward to judge how the scene actually went for ${params.charName}.`,
+    `You are drafting a private, hidden motivation for ${params.charName} going into a scene: "${params.eventTitle}". This is NEVER shown to the other person, it is only used afterward to judge how the scene actually went for ${params.charName}.`,
     params.charPersonality ? `${params.charName}'s personality: ${params.charPersonality}` : '',
     params.charGoals?.length ? `${params.charName}'s goals: ${params.charGoals.join('; ')}` : '',
     params.charBoundaries?.length ? `${params.charName}'s boundaries: ${params.charBoundaries.join('; ')}` : '',
     `Where things currently stand between them: ${params.warmthLabel}.`,
-    `What does ${params.charName} secretly want, need, or fear from this specific scene, given who they are? One thing, concrete and specific to their character — not a generic "wants to have a good time".`,
+    `What does ${params.charName} secretly want, need, or fear from this specific scene, given who they are? One thing, concrete and specific to their character, not a generic "wants to have a good time".`,
     'Return ONLY that one sentence, in third person, nothing else. No quotes, no preamble.',
     'Sentence:',
   ]

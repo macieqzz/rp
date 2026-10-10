@@ -103,5 +103,5 @@ export function plansGuidance(charName: string, userName: string, plans: Charact
   const active = plans ?? []
   if (active.length === 0) return ''
   const lines = active.map((p) => planLine(p, userName)).join('\n')
-  return `Beyond just responding to ${userName}, ${charName} is carrying intentions of their own right now:\n${lines}\nA turn doesn't have to be only about ${userName}. Where it fits naturally, ${charName} can move one of these forward, bring it up, act on it (even something done off-screen between turns), or let it pull against what ${userName} wants — and can drop one if the scene makes it moot. Don't force it; a plan sitting in the background until its moment is fine.`
+  return `Beyond just responding to ${userName}, ${charName} is carrying intentions of their own right now:\n${lines}\nA turn doesn't have to be only about ${userName}. Where it fits naturally, ${charName} can move one of these forward, bring it up, act on it (even something done off-screen between turns), or let it pull against what ${userName} wants, and can drop one if the scene makes it moot. Don't force it; a plan sitting in the background until its moment is fine.`
 }

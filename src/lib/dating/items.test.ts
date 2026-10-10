@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_ITEM_CATALOG, getItemCatalog, itemById, itemEffectSummary } from './items'
 import type { ItemDef, WorldCard } from '@/lib/types'
 import { SCENE_FLAGS } from './stage'
+import { MOOD_VOCAB } from '@/lib/prompt/mindGuidance'
 
 describe('getItemCatalog', () => {
   // The bug this catalog exists to fix: with no default, the Items section, the Bag panel and the
@@ -102,5 +103,23 @@ describe('multi effects', () => {
     expect(itemEffectSummary(itemById('part-time-shift')!)).toBe('+12 coins when used')
     expect(itemEffectSummary(itemById('festival-tickets')!)).toBe('Sets "first date"')
     expect(itemEffectSummary(itemById('canned-coffee')!)).toBe('+3 comfort when used')
+  })
+})
+
+describe('mood effects', () => {
+  it('reads a mood item on its own and inside a multi', () => {
+    expect(itemEffectSummary(itemById('warm-tea')!)).toBe('Leaves her relieved when used')
+    expect(itemEffectSummary(itemById('onigiri-trio')!)).toBe('+2 trust, leaves her content when used')
+  })
+
+  it('only ever uses moods from the closed mood vocabulary', () => {
+    const moods: string[] = []
+    const collect = (e: ItemDef['effect']) => {
+      if (e.kind === 'mood') moods.push(e.mood)
+      if (e.kind === 'multi') e.effects.forEach(collect)
+    }
+    DEFAULT_ITEM_CATALOG.forEach((i) => collect(i.effect))
+    expect(moods.length).toBeGreaterThan(0)
+    expect(moods.every((m) => (MOOD_VOCAB as readonly string[]).includes(m))).toBe(true)
   })
 })

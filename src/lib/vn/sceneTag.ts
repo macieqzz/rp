@@ -81,7 +81,7 @@ export function buildSceneInstruction(options?: {
     wantsMood ? `Valid mood IDs: ${options.moodIds!.join(', ')}` : '',
     wantsOutfit ? `Valid outfit IDs: ${options.outfitIds!.join(', ')}` : '',
     wantsOutfit
-      ? `The character is currently wearing "${options.currentOutfitId || 'base'}". Only use a different outfit ID when the story has actually changed what they are wearing — they got changed, arrived somewhere needing different clothes, undressed. Otherwise repeat the current one. Never change an outfit just because the mood shifted.`
+      ? `The character is currently wearing "${options.currentOutfitId || 'base'}". Only use a different outfit ID when the story has actually changed what they are wearing, they got changed, arrived somewhere needing different clothes, undressed. Otherwise repeat the current one. Never change an outfit just because the mood shifted.`
       : '',
     options.expressionIds.length || options.backgroundIds.length
       ? wantsMood

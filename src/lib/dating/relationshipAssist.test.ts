@@ -1155,3 +1155,34 @@ describe('assessRelationshipMoment: present participants', () => {
     expect(promptEmptyArray).not.toMatch(/actually present and speaking/)
   })
 })
+
+describe('assessRelationshipMoment: compact output and prompt layout', () => {
+  const params = { history: TRANSCRIPT, latestReply: 'Thanks for helping me pack up.', charName: 'Sumire', userName: 'Kai', current: currentStats }
+
+  it('accepts a minimal object that omits every empty key', async () => {
+    const moment = await assessRelationshipMoment(stubClient('{"deltas":{"affection":1,"comfort":1},"reason":"Helped pack up"}'), params)
+    expect(moment.deltas).toEqual(deltas({ affection: 1, comfort: 1 }))
+    expect(moment.newFlags).toEqual([])
+    expect(moment.newFacts).toEqual([])
+    expect(moment.planUpdates).toEqual([])
+    expect(moment.beliefUpdates).toEqual([])
+    expect(moment.expectationUpdates).toEqual([])
+    expect(moment.reason).toBe('Helped pack up')
+  })
+
+  it('clamps an overshooting delta instead of discarding it, and tolerates a leading plus', async () => {
+    const moment = await assessRelationshipMoment(stubClient('{"deltas":{"affection":-5,"tension":+2,"trust":"x"}}'), params)
+    expect(moment.deltas).toEqual(deltas({ affection: -2, tension: 2 }))
+  })
+
+  it('puts the unchanging rules and examples ahead of the exchange so a backend can cache them', async () => {
+    const prompts: string[] = []
+    for (const latestReply of ['First reply text.', 'A completely different second reply.']) {
+      await assessRelationshipMoment(stubClient('{}', (p) => prompts.push(p.prompt as string)), { ...params, latestReply })
+    }
+    let shared = 0
+    while (shared < prompts[0].length && prompts[0][shared] === prompts[1][shared]) shared++
+    expect(shared).toBeGreaterThan(prompts[0].length * 0.6)
+    expect(prompts[0].indexOf('Example (')).toBeLessThan(prompts[0].indexOf('First reply text.'))
+  })
+})

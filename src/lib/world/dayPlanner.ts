@@ -50,7 +50,7 @@ export function buildDayPlannerActivities(character: PlannerCharacter, world: Pl
   const phaseIndex = world.currentPhaseIndex ?? 0
   const name = character.card.name
   const outOfEnergy = getEnergyRemaining(day, phaseIndex) <= 0
-  const disabledReason = outOfEnergy ? 'No actions left today — rest to start a new day.' : undefined
+  const disabledReason = outOfEnergy ? 'No actions left today, rest to start a new day.' : undefined
   const location = resolveMeetLocation(character, day, phaseIndex)
 
   return [

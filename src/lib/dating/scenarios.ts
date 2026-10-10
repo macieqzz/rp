@@ -165,7 +165,7 @@ export function validateScenarioSource(raw: unknown): string[] {
   const obj = raw as Record<string, unknown>
   const problems: string[] = []
   if (typeof obj.id !== 'string' || !obj.id.trim()) problems.push('missing id')
-  if (obj.version !== 1) problems.push('unsupported version — expected 1')
+  if (obj.version !== 1) problems.push('unsupported version (expected 1)')
   if (typeof obj.title !== 'string' || !obj.title.trim()) problems.push('missing title')
   if (typeof obj.entryStage !== 'string' || !obj.entryStage.trim()) problems.push('missing entryStage')
   if (!Array.isArray(obj.stages)) return [...problems, 'stages must be an array']

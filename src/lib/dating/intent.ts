@@ -32,7 +32,7 @@ export const MESSAGE_INTENTS: IntentSpec[] = [
   {
     id: 'flirt',
     label: 'Flirt',
-    hint: 'Meant as an advance — charm, a compliment with weight behind it.',
+    hint: 'Meant as an advance, charm, a compliment with weight behind it.',
     judgeLine:
       'a flirt: read whether it landed. Welcome and well-timed, it builds chemistry; unwanted, clumsy, or too fast for where things stand, it adds tension or costs comfort.',
     gatedBy: null,
@@ -50,7 +50,7 @@ export const MESSAGE_INTENTS: IntentSpec[] = [
     label: 'Open up',
     hint: 'Sharing something real or vulnerable.',
     judgeLine:
-      'the player opening up — sharing something real or vulnerable. Met with warmth it builds trust and closeness; brushed off or overshared too early, it can feel exposing.',
+      'the player opening up, sharing something real or vulnerable. Met with warmth it builds trust and closeness; brushed off or overshared too early, it can feel exposing.',
     gatedBy: null,
   },
   {

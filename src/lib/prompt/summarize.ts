@@ -32,7 +32,7 @@ function voiceRetentionInstruction(charName: string, fingerprint: VoiceFingerpri
   )
   if (!hasSignal) return ''
   const namedExample = example ? ` (something like "${example}")` : ''
-  return `${charName} has a distinctive voice worth protecting${namedExample}. If a line in the new events below clearly demonstrates it — a catchphrase, a verbal tic, their particular register — keep a brief exact quote of it rather than paraphrasing it into flat third-person prose; that quote is what keeps their voice from flattening out once this summary becomes the only record of what happened.`
+  return `${charName} has a distinctive voice worth protecting${namedExample}. If a line in the new events below clearly demonstrates it, a catchphrase, a verbal tic, their particular register, keep a brief exact quote of it rather than paraphrasing it into flat third-person prose; that quote is what keeps their voice from flattening out once this summary becomes the only record of what happened.`
 }
 
 /** Rough max_length to hand the API for each detail level. */
@@ -57,10 +57,11 @@ export async function summarizeMessages({
       : 'Cover key facts established, relationship or emotional developments, and important events either character would remember. Third person, plain prose, no headers or bullet points, no em dashes, under 200 words.'
   const voiceInstruction = voiceRetentionInstruction(charName, voiceFingerprint)
   const prompt = [
-    `Task: maintain a running memory log for a roleplay chat between ${userName} and ${charName}.`,
+    `Task: maintain a running memory log for a roleplay chat between ${userName} and ${charName}. Merge the new events into the existing memory (don't just append: integrate, and drop anything superseded).`,
+    `Keep what could matter later: names, places, promises and plans, what each person said they like or want, running jokes, and anything left unresolved. Drop filler, greetings and scenery. Report who said or did what exactly as it happened in the text below; never swap the two people's words or choices, and leave out anything you're unsure of rather than guessing. ${lengthInstruction} Do not invent anything that didn't happen below.${voiceInstruction ? ` ${voiceInstruction}` : ''}`,
     existingSummary.trim() ? `Memory so far:\n${existingSummary.trim()}` : '',
     `New events to fold in:\n${transcript}`,
-    `Write the updated memory log: merge the new events into the existing memory (don't just append, integrate and drop anything superseded). ${lengthInstruction} Do not invent anything that didn't happen above.${voiceInstruction ? ` ${voiceInstruction}` : ''}\n\nUpdated memory log:`,
+    'Updated memory log:',
   ]
     .filter(Boolean)
     .join('\n\n')

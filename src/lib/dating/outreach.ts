@@ -115,16 +115,16 @@ export function outreachReasonHint(
 ): string {
   switch (reason) {
     case 'silence':
-      return `You haven't heard from ${opts.userName} in a while and decided to reach out first, unprompted — a short, casual check-in, the kind of thing you'd actually text someone.`
+      return `You haven't heard from ${opts.userName} in a while and decided to reach out first, unprompted, a short, casual check-in, the kind of thing you'd actually text someone.`
     case 'schedule':
-      return `Given what you're currently doing right now, you decided to text ${opts.userName} first, unprompted — casual and brief, mentioning what's going on with you only if it comes up naturally.`
+      return `Given what you're currently doing right now, you decided to text ${opts.userName} first, unprompted, casual and brief, mentioning what's going on with you only if it comes up naturally.`
     case 'warmth':
-      return `Things have been going well between you and ${opts.userName} lately, and you found yourself wanting to reach out first, unprompted — just a short, warm text because you were thinking of them.`
+      return `Things have been going well between you and ${opts.userName} lately, and you found yourself wanting to reach out first, unprompted, just a short, warm text because you were thinking of them.`
     case 'life_event':
       // Falls back to 'silence' text if somehow called with no event on hand.
       return opts.ambientEvent
-        ? `Something concrete just gave you a real reason to text ${opts.userName} first, unprompted: ${describeAmbientEvent(opts.charName, opts.ambientEvent)} Let that actually shape what you say — specific, not a generic "thinking of you" text — the way a real text message would bring it up.`
-        : `You haven't heard from ${opts.userName} in a while and decided to reach out first, unprompted — a short, casual check-in, the kind of thing you'd actually text someone.`
+        ? `Something concrete just gave you a real reason to text ${opts.userName} first, unprompted: ${describeAmbientEvent(opts.charName, opts.ambientEvent)} Let that actually shape what you say, specific, not a generic "thinking of you" text, the way a real text message would bring it up.`
+        : `You haven't heard from ${opts.userName} in a while and decided to reach out first, unprompted, a short, casual check-in, the kind of thing you'd actually text someone.`
   }
 }
 
@@ -186,7 +186,7 @@ export async function generateOutreachMessage(client: ChatBackend, params: Gener
       : undefined
   const styleGuidance = [
     outreachReasonHint(params.reason, { charName: character.card.name, userName: params.personaName || 'You', ambientEvent }),
-    'Write only the text message itself — no narration, no action asterisks, no scene-setting, no "<START>" or other scene-break marker, and no line written as or on behalf of anyone else. One to three short sentences, exactly how a real text message reads, then stop completely.',
+    'Write only the text message itself, no narration, no action asterisks, no scene-setting, no "<START>" or other scene-break marker, and no line written as or on behalf of anyone else. One to three short sentences, exactly how a real text message reads, then stop completely.',
   ].join(' ')
 
   const contextBudget = Math.max(params.sampler.max_context_length - params.sampler.max_length - 32, 256)

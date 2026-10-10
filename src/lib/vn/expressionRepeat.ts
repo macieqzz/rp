@@ -32,5 +32,5 @@ export function expressionRepeatNote(charName: string, recentExpressionIds: (str
   for (let i = ids.length - 2; i >= 0 && ids[i] === held; i--) run++
   if (run < REPEAT_THRESHOLD) return undefined
 
-  return `${charName} has been drawn with the same "${held}" expression for ${run} replies in a row now. Let the face actually change this time — react with a different expression unless the moment genuinely calls for holding perfectly still.`
+  return `${charName} has been drawn with the same "${held}" expression for ${run} replies in a row now. Let the face actually change this time, react with a different expression unless the moment genuinely calls for holding perfectly still.`
 }

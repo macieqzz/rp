@@ -267,6 +267,16 @@ export function ConnectionSettings() {
             </div>
           </div>
         )}
+
+        <div className="mt-4 rounded-xl bg-bg-elevated p-5 text-xs text-text-muted">
+          <p className="text-text">Make long chats cheaper on the GPU</p>
+          <p className="mt-1.5">
+            The app keeps the start of each prompt identical so KoboldCpp only reads what's new. Launch it with{' '}
+            <code>--smartcache 6</code> so it keeps a separate copy of the chat's cache while background checks
+            (relationship, choices, memory) run. The line under each reply (<em>cache reused</em> /{' '}
+            <em>full prompt re-read</em>) shows how that reply went.
+          </p>
+        </div>
       </Section>
     </SettingsPage>
   )

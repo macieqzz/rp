@@ -67,7 +67,37 @@ export const DEFAULT_ITEM_CATALOG: ItemDef[] = [
     price: 4,
     tags: ['sweet', 'casual'],
     description: 'Still warm. Cheap enough to become a habit.',
-    effect: { kind: 'relationship', dimension: 'comfort', amount: 3 },
+    effect: {
+      kind: 'multi',
+      effects: [
+        { kind: 'relationship', dimension: 'comfort', amount: 3 },
+        { kind: 'mood', mood: 'content' },
+      ],
+    },
+  },
+  {
+    id: 'onigiri-trio',
+    name: 'Onigiri Trio',
+    rarity: 'common',
+    price: 5,
+    tags: ['food', 'casual'],
+    description: 'Three, from the good shelf. Handed over without a speech.',
+    effect: {
+      kind: 'multi',
+      effects: [
+        { kind: 'relationship', dimension: 'trust', amount: 2 },
+        { kind: 'mood', mood: 'content' },
+      ],
+    },
+  },
+  {
+    id: 'warm-tea',
+    name: 'Warm Can of Tea',
+    rarity: 'common',
+    price: 3,
+    tags: ['comfort', 'casual'],
+    description: 'Pressed into a cold hand. Nobody has to say anything about it.',
+    effect: { kind: 'mood', mood: 'relieved' },
   },
   {
     id: 'throat-lozenges',
@@ -171,6 +201,7 @@ export function itemById(id: string, world?: WorldCard): ItemDef | undefined {
 function describeEffect(e: ItemEffect): string {
   if (e.kind === 'currency') return `+${e.amount} coins`
   if (e.kind === 'flag') return `sets "${e.flag.replace(/_/g, ' ')}"`
+  if (e.kind === 'mood') return `leaves her ${e.mood}`
   if (e.kind === 'multi') return e.effects.map(describeEffect).join(', ')
   return `${e.amount > 0 ? '+' : ''}${e.amount} ${e.dimension}`
 }
@@ -182,6 +213,7 @@ export function itemEffectSummary(item: ItemDef): string {
   // generic join), so they stay verbatim; only `multi` composes.
   if (e.kind === 'currency') return `+${e.amount} coins when used`
   if (e.kind === 'flag') return `Sets "${e.flag.replace(/_/g, ' ')}"`
+  if (e.kind === 'mood') return `Leaves her ${e.mood} when used`
   if (e.kind === 'multi') {
     const parts = describeEffect(e)
     return `${parts.charAt(0).toUpperCase()}${parts.slice(1)} when used`

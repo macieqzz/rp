@@ -24,13 +24,13 @@ export function vnArtHint(
   const worldHasBackgrounds = !!world?.backgrounds && Object.keys(world.backgrounds).length > 0
 
   if (!hasSprites) {
-    return `No expression sprites for ${name} yet — add art in the character editor's Visual novel tab and it will show here.`
+    return `No expression sprites for ${name} yet, add art in the character editor's Visual novel tab and it will show here.`
   }
   if (!world) {
     return `${name} isn't bound to a world, so scenes have no background. Assign one from the character editor's Identity tab.`
   }
   if (!worldHasBackgrounds) {
-    return `${world.name?.trim() || 'This world'} has no scene backgrounds — add them in the world editor to replace this placeholder.`
+    return `${world.name?.trim() || 'This world'} has no scene backgrounds, add them in the world editor to replace this placeholder.`
   }
   return null
 }

@@ -89,3 +89,9 @@ describe('parseLenientJson', () => {
     expect(result.tags).toEqual(['stoic', 'quiet'])
   })
 })
+
+describe('parseLenientJson signed numbers', () => {
+  it('accepts a leading plus on a number value', () => {
+    expect(parseLenientJson('{"deltas":{"tension":+2,"trust":-1}}')).toEqual({ deltas: { tension: 2, trust: -1 } })
+  })
+})

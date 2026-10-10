@@ -35,9 +35,9 @@ const FIELD_LABELS: Record<CardTextField, string> = {
  *  so it fits" prompt, which said nothing about the target and so drifted straight to generic. */
 const FIELD_GUIDANCE: Record<CardTextField, string> = {
   description:
-    'A good description is concrete and particular: specific physical details (not "attractive", "piercing eyes", "an air of mystery"), and a background with real events, places, and names rather than a sketch of a personality type. Keep every fact the current text establishes — looks, history, relationships, the world it names — and rewrite the prose around those facts so it reads like it was written by someone who actually knows this character.',
+    'A good description is concrete and particular: specific physical details (not "attractive", "piercing eyes", "an air of mystery"), and a background with real events, places, and names rather than a sketch of a personality type. Keep every fact the current text establishes, looks, history, relationships, the world it names, and rewrite the prose around those facts so it reads like it was written by someone who actually knows this character.',
   personality:
-    'A good personality says how this character actually behaves: how they talk (clipped? formal? they overshare when nervous?), what they do when cornered or challenged, what they want, what they will not do. Traits with edges and contradictions, not a list of good qualities. Match the voice in their first message and example dialogue exactly — this field and those should sound like the same person.',
+    'A good personality says how this character actually behaves: how they talk (clipped? formal? they overshare when nervous?), what they do when cornered or challenged, what they want, what they will not do. Traits with edges and contradictions, not a list of good qualities. Match the voice in their first message and example dialogue exactly, this field and those should sound like the same person.',
   scenario:
     'A good scenario is the concrete situation the chat opens in, in the present tense: where the characters are, what just happened, why {{user}} and {{char}} are in the same place right now. One short paragraph. Not a life story, not a mood piece.',
 }
@@ -159,7 +159,7 @@ export async function regenerateCardField(
 
 /** The card fields every draft path fills, and how each should read. Portrait mode prepends its own
  *  image-fidelity note; the JSON shape and formatting rules below are identical for both. */
-const CARD_FIELD_SPEC = `Output ONLY a single JSON object. No markdown fences, no commentary before or after — with exactly these keys:
+const CARD_FIELD_SPEC = `Output ONLY a single JSON object. No markdown fences, no commentary before or after, with exactly these keys:
 - "name": string.
 - "description": string. Appearance and background, in concrete detail rather than a general impression.
 - "personality": string. How they talk, move, and treat people: traits with edges, not a list of good qualities.
@@ -175,11 +175,11 @@ const PROSE_STYLE_CORE = `Write like a person, not like an AI. Plain, specific l
 
 /** Whole-card version: the core plus the cross-field consistency point, aimed at the two fields
  *  that are actual fiction (`first_mes`, `mes_example`) rather than metadata. */
-const CARD_PROSE_STYLE = `Prose style, above all in "first_mes" and "mes_example": ${PROSE_STYLE_CORE} Give the character one specific voice and keep it consistent across the personality, the first message, and the examples — a blunt character is blunt in all three.`
+const CARD_PROSE_STYLE = `Prose style, above all in "first_mes" and "mes_example": ${PROSE_STYLE_CORE} Give the character one specific voice and keep it consistent across the personality, the first message, and the examples, a blunt character is blunt in all three.`
 
-const CARD_JSON_RULES = `Critical JSON rules: output strictly valid JSON. Keep every string value on a single logical line — write \\n for any line break inside a string, never a real newline. Follow every property and array element with a comma unless it is the last one. Straight double quotes only; escape any quote inside a string as \\".`
+const CARD_JSON_RULES = `Critical JSON rules: output strictly valid JSON. Keep every string value on a single logical line, write \\n for any line break inside a string, never a real newline. Follow every property and array element with a comma unless it is the last one. Straight double quotes only; escape any quote inside a string as \\".`
 
-const PORTRAIT_SYSTEM_INSTRUCTION = `You write character cards for a roleplay app, working from a reference portrait instead of a text brief. Look at the attached image and build a character who plausibly fits what it actually shows — expression, styling, setting, era, every visible detail. "description" must match the image, not a generic guess; the background is yours to invent.
+const PORTRAIT_SYSTEM_INSTRUCTION = `You write character cards for a roleplay app, working from a reference portrait instead of a text brief. Look at the attached image and build a character who plausibly fits what it actually shows, expression, styling, setting, era, every visible detail. "description" must match the image, not a generic guess; the background is yours to invent.
 
 ${CARD_FIELD_SPEC}
 
@@ -389,14 +389,14 @@ export async function draftCharacterProfile(
     `Character so far:\n${contextSummary(subject)}`,
     [
       'Output ONLY a single minified JSON object with exactly these keys:',
-      '"occupation": string — their job or role (e.g. "night-shift nurse", "third-year art student"), or "" if genuinely not applicable.',
-      '"workplace": string — where they work or study, or "".',
-      '"homeLocation": string — where they live, one short phrase.',
-      '"frequentedLocations": array of 2-4 short strings — places they are often found.',
-      '"likes": array of 3-6 short strings — interests and hobbies.',
-      '"goals": array of 2-4 short strings — what they want or are working toward.',
-      '"boundaries": array of 1-3 short strings — things they will not do or will not tolerate, in character.',
-      '"loveLanguage": string — one sentence on how they most feel cared for.',
+      '"occupation": string, their job or role (e.g. "night-shift nurse", "third-year art student"), or "" if genuinely not applicable.',
+      '"workplace": string, where they work or study, or "".',
+      '"homeLocation": string, where they live, one short phrase.',
+      '"frequentedLocations": array of 2-4 short strings, places they are often found.',
+      '"likes": array of 3-6 short strings, interests and hobbies.',
+      '"goals": array of 2-4 short strings, what they want or are working toward.',
+      '"boundaries": array of 1-3 short strings, things they will not do or will not tolerate, in character.',
+      '"loveLanguage": string, one sentence on how they most feel cared for.',
       'Keep everything consistent with the description and personality above. Plain, concrete language. No markdown, no commentary.',
     ].join('\n'),
     'JSON:',
@@ -472,11 +472,11 @@ export async function draftCharacterBonds(
     `Character so far:\n${contextSummary(subject)}`,
     [
       'Output ONLY a single minified JSON object with exactly these keys:',
-      '"giftLikes": array of 2-4 short strings — kinds of gifts this character loves (categories, not specific items).',
-      '"giftDislikes": array of 1-3 short strings — kinds of gifts that fall flat.',
+      '"giftLikes": array of 2-4 short strings, kinds of gifts this character loves (categories, not specific items).',
+      '"giftDislikes": array of 1-3 short strings, kinds of gifts that fall flat.',
       `"weatherLoves": array of 0-3 values, each EXACTLY one of: ${WEATHER_KINDS.join(', ')}.`,
       '"weatherHates": array of 0-3 values from that same set.',
-      '"relationshipStarters": array of EXACTLY 3 objects {"label": short string, "blurb": 1-2 sentences in second person ("You and NAME ..."), "startingAffection": number}. The three escalate: startingAffection 0, then about 20, then about 35 — three ways the player might already know this character, from total strangers to a real prior history.',
+      '"relationshipStarters": array of EXACTLY 3 objects {"label": short string, "blurb": 1-2 sentences in second person ("You and NAME ..."), "startingAffection": number}. The three escalate: startingAffection 0, then about 20, then about 35, three ways the player might already know this character, from total strangers to a real prior history.',
       'Keep everything consistent with the personality above. Plain language. No markdown, no commentary.',
     ].join('\n'),
     'JSON:',
@@ -534,12 +534,12 @@ export async function draftCharacterOutfits(
   opts?: { worldTone?: string; signal?: AbortSignal },
 ): Promise<Outfit[]> {
   const prompt = [
-    'You are proposing wardrobe states ("outfits") for a character in a visual-novel roleplay app — alternate looks the story can switch them into. No images: just a name for each and the affection level at which it becomes available.',
+    'You are proposing wardrobe states ("outfits") for a character in a visual-novel roleplay app, alternate looks the story can switch them into. No images: just a name for each and the affection level at which it becomes available.',
     opts?.worldTone?.trim() ? `World this character lives in:\n${opts.worldTone.trim()}` : '',
     `Character so far:\n${contextSummary(subject)}`,
     [
       'Output ONLY a minified JSON array of 2-4 objects, each {"label": short string, "unlockAffection": number 0-100, "intimate": boolean}.',
-      'The first outfit is their everyday default look with unlockAffection 0. The rest fit the character and escalate a little — a formal or work look, a seasonal one, a relaxed at-home one. Set "intimate": true on at most one, only for an undressed / bedroom state, and give it a high unlockAffection.',
+      'The first outfit is their everyday default look with unlockAffection 0. The rest fit the character and escalate a little, a formal or work look, a seasonal one, a relaxed at-home one. Set "intimate": true on at most one, only for an undressed / bedroom state, and give it a high unlockAffection.',
       'Do not repeat the look the description already puts them in. No markdown, no commentary.',
     ].join('\n'),
     'JSON:',

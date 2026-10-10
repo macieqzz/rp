@@ -28,7 +28,7 @@ describe('sceneStateBlock', () => {
 
   it('names both sides of the clothing state once anything has come off', () => {
     const block = sceneStateBlock(facts({ clothing: { char: ['outerwear', 'top', 'bottoms'] } }))
-    expect(block).toContain('Clothing — Sumire: underwear only. Kai: dressed.')
+    expect(block).toContain('Clothing now. Sumire: underwear only. Kai: dressed.')
   })
 
   it('says nothing about clothing while everyone is still dressed', () => {

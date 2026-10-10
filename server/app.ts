@@ -24,6 +24,7 @@ import { removeAvatar, resolveAvatar, resolveAvatarMap, resolveAvatarMapVariants
 import { encodeTokens, tokenizerForModel } from './novelaiTokenizer.ts'
 import { originGuard } from './originCheck.ts'
 import { openMayhemRouter } from './openMayhem.ts'
+import { normalizeItemEffect } from './itemEffects.ts'
 
 /**
  * Express app: REST routes for characters, personas, chats/messages, world info books, sampler
@@ -244,7 +245,6 @@ function normalizeGiftItems(raw: unknown) {
     }))
 }
 
-const RELATIONSHIP_DELTA_KEYS = new Set(['affection', 'trust', 'chemistry', 'comfort', 'respect', 'curiosity', 'tension'])
 /** Flags always available regardless of world; a world's `customSceneFlags` extend this set (see `normalizeItemDefs`'s `allowedFlags`). */
 const DEFAULT_SCENE_FLAGS = new Set(['first_date', 'confession', 'jealousy', 'promise'])
 
@@ -259,28 +259,6 @@ function normalizeCustomSceneFlags(raw: unknown): { id: string; label: string; d
       description: typeof f.description === 'string' ? f.description.trim() : '',
     }))
     .filter((f) => !!f.label)
-}
-
-/** Validates an item's effect union; a "Set scene flag" referencing an id outside `allowedFlags` falls through to the default relationship-nudge branch. */
-function normalizeItemEffect(
-  raw: unknown,
-  allowedFlags: Set<string>,
-): { kind: string; dimension?: string; flag?: string; amount?: number } {
-  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
-  if (obj.kind === 'flag' && allowedFlags.has(obj.flag as string)) {
-    return { kind: 'flag', flag: obj.flag as string }
-  }
-  if (obj.kind === 'currency') {
-    return { kind: 'currency', amount: Math.max(0, Number(obj.amount) || 0) }
-  }
-  const dimension = RELATIONSHIP_DELTA_KEYS.has(obj.dimension as string) ? (obj.dimension as string) : 'affection'
-  const amount = Number(obj.amount)
-  // Round rather than reject a fractional amount, so it isn't silently replaced with a fixed 1.
-  return {
-    kind: 'relationship',
-    dimension,
-    amount: Number.isFinite(amount) ? Math.max(-10, Math.min(10, Math.round(amount))) : 1,
-  }
 }
 
 function normalizeItemDefs(raw: unknown, allowedFlags: Set<string>) {

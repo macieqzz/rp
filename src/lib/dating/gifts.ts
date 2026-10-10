@@ -79,7 +79,7 @@ export function giftBirthdayMultiplier(baseDelta: number, isBirthdayToday: boole
  *  appends to) `giftReactionGuidance`'s taste-based read, since the occasion itself supersedes it:
  *  a birthday gift is a big deal regardless of whether it happens to be exactly their taste. */
 export function birthdayGiftGuidance(charName: string, giftName: string): string {
-  return `Today is ${charName}'s actual birthday, which makes ${giftName} land as a much bigger deal than an ordinary gift — genuine warmth, real delight that it's today of all days, and it's fair for ${charName} to actually thank the giver for remembering. This holds regardless of whether ${giftName} would otherwise have been exactly their taste.`
+  return `Today is ${charName}'s actual birthday, which makes ${giftName} land as a much bigger deal than an ordinary gift, genuine warmth, real delight that it's today of all days, and it's fair for ${charName} to actually thank the giver for remembering. This holds regardless of whether ${giftName} would otherwise have been exactly their taste.`
 }
 
 /** Extra cost when a gift the character has an authored dislike for is given again after already missing once. `0` the first time (the base negative score already covers that miss). */
@@ -128,22 +128,22 @@ export function giftReactionGuidance(
   taste?: GiftTaste,
 ): string | undefined {
   if (isMismatch && priorTimesGivenThisGift > 0) {
-    return `This isn't the first time ${userName} has given ${charName} something like this even though it's never really landed for them. ${charName} can be genuinely gracious without pretending this is exactly what they wanted — a real reaction, not a performance of delight.`
+    return `This isn't the first time ${userName} has given ${charName} something like this even though it's never really landed for them. ${charName} can be genuinely gracious without pretending this is exactly what they wanted, a real reaction, not a performance of delight.`
   }
   if (sameGiftRun >= 2) {
-    return `${userName} has now given ${charName} a ${giftName} several times in a row with nothing else in between. By now it can read as a little repetitive or hollow to ${charName} rather than landing with the same delight as the very first time — let that show honestly, without it becoming a real conflict.`
+    return `${userName} has now given ${charName} a ${giftName} several times in a row with nothing else in between. By now it can read as a little repetitive or hollow to ${charName} rather than landing with the same delight as the very first time, let that show honestly, without it becoming a real conflict.`
   }
   if (sameGiftRun === 1) {
     return `${userName} just gave ${charName} another ${giftName}, the same gift as last time. Still sweet, but ${charName} can notice the repeat rather than reacting exactly as freshly as the first time.`
   }
   if (recentGiftCount >= 2) {
-    return `${userName} has been giving ${charName} gifts in quick succession lately. However this one lands on its own merits, it can also register as a little much in such a short span — each gift doesn't quite get to be its own moment when they're stacked this close together.`
+    return `${userName} has been giving ${charName} gifts in quick succession lately. However this one lands on its own merits, it can also register as a little much in such a short span, each gift doesn't quite get to be its own moment when they're stacked this close together.`
   }
   if (taste && isThoughtfulNotExpensive(taste)) {
-    return `The ${giftName} isn't a lavish or expensive gift, but it happens to be exactly ${charName}'s taste. Let that land as genuinely touching precisely because of how well-chosen and personal it is — the thought and the fit are what's moving here, not the price tag.`
+    return `The ${giftName} isn't a lavish or expensive gift, but it happens to be exactly ${charName}'s taste. Let that land as genuinely touching precisely because of how well-chosen and personal it is, the thought and the fit are what's moving here, not the price tag.`
   }
   if (taste && isExpensiveNotThoughtful(taste)) {
-    return `The ${giftName} is a genuinely lavish, expensive gift, but it isn't really ${charName}'s taste. ${charName} can be sincerely appreciative of the gesture and the generosity without it landing as deeply personal — impressive is not the same feeling as truly wanted, and it's fine for the reaction to reflect that honestly.`
+    return `The ${giftName} is a genuinely lavish, expensive gift, but it isn't really ${charName}'s taste. ${charName} can be sincerely appreciative of the gesture and the generosity without it landing as deeply personal, impressive is not the same feeling as truly wanted, and it's fine for the reaction to reflect that honestly.`
   }
   return undefined
 }
@@ -256,5 +256,5 @@ export function reciprocityGuidance(charName: string, userName: string, reason: 
     reason === 'gift_received'
       ? `${userName} gave them something not long ago that genuinely landed`
       : `things between them have genuinely deepened to a new point lately`
-  return `Right now, ${because} — it would be earned, not forced, for ${charName} to reciprocate in some small way of their own: a small gift, a thoughtful gesture, something they made or picked out, or simply showing up with something in hand. This is an option, not an obligation — ${charName} doesn't have to act on it this exact turn, and if they do, it should come from who they are rather than read as a mechanical tit-for-tat.`
+  return `Right now, ${because}, it would be earned, not forced, for ${charName} to reciprocate in some small way of their own: a small gift, a thoughtful gesture, something they made or picked out, or simply showing up with something in hand. This is an option, not an obligation, ${charName} doesn't have to act on it this exact turn, and if they do, it should come from who they are rather than read as a mechanical tit-for-tat.`
 }

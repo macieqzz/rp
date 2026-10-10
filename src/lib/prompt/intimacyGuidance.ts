@@ -18,11 +18,11 @@ export function resolveIntimacyLevel(
 export function intimacyGuidance(level: IntimacyDetailLevel): string {
   switch (level) {
     case 'fade_to_black':
-      return "When a scene turns intimate, imply and suggest rather than describe explicitly — trail off, cut to after, or shift the scene once things move past kissing or undressing. Don't narrate explicit sexual content."
+      return "When a scene turns intimate, imply and suggest rather than describe explicitly, trail off, cut to after, or shift the scene once things move past kissing or undressing. Don't narrate explicit sexual content."
     case 'suggestive':
-      return 'Intimate scenes can include sensual, romantic detail — physical closeness, described touch, charged tension, arousal — without being graphically explicit. Evocative, not clinical or crude.'
+      return 'Intimate scenes can include sensual, romantic detail, physical closeness, described touch, charged tension, arousal, without being graphically explicit. Evocative, not clinical or crude.'
     case 'explicit':
-      return "This is an adult roleplay with explicit content enabled by the user. When a scene the story has actually built toward turns sexual, write it fully and explicitly — physical detail, dialogue, sensation — in the character's own established voice, not a generic one. Don't fade to black or cut away once the scene has genuinely earned it; a sudden cut after real narrative buildup reads as a bug, not tact."
+      return "This is an adult roleplay with explicit content enabled by the user. When a scene the story has actually built toward turns sexual, write it fully and explicitly, physical detail, dialogue, sensation, in the character's own established voice, not a generic one. Don't fade to black or cut away once the scene has genuinely earned it; a sudden cut after real narrative buildup reads as a bug, not tact."
     case 'default':
     default:
       return ''

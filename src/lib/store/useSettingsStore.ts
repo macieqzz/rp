@@ -235,6 +235,12 @@ interface SettingsState {
   setAutoSummarize: (v: boolean) => void
   setKeepRecentMessages: (n: number) => void
   setSummaryDetail: (d: 'concise' | 'detailed') => void
+  /** Lay prompts out so the backend's KV cache survives between turns, and fold old chat into the summary in rare large steps instead of every few turns. */
+  cacheFriendlyPrompts: boolean
+  setCacheFriendlyPrompts: (v: boolean) => void
+  /** Percent of the history window kept verbatim after a compaction (the rest becomes summary). Lower = fewer, larger compactions = cheaper. */
+  compactionKeepPercent: number
+  setCompactionKeepPercent: (n: number) => void
 
   // objectives
   autoDetectTasks: boolean
@@ -281,6 +287,9 @@ interface SettingsState {
   // writing-style steering — injected into every prompt, right before generation
   styleGuidance: string
   avoidEmDashes: boolean
+  /** Rewrite any em dash the model still produces into a comma or ellipsis before the reply is stored. */
+  replaceEmDashes: boolean
+  setReplaceEmDashes: (v: boolean) => void
   setStyleGuidance: (v: string) => void
   setAvoidEmDashes: (v: boolean) => void
   /** Steers scene content (not just prose) so a character doesn't give in to a request just to be agreeable. Defaults on. */
@@ -461,6 +470,10 @@ export const useSettingsStore = create<SettingsState>()(
       setAutoSummarize: (v) => set({ autoSummarize: v }),
       setKeepRecentMessages: (n) => set({ keepRecentMessages: n }),
       setSummaryDetail: (d) => set({ summaryDetail: d }),
+      cacheFriendlyPrompts: true,
+      setCacheFriendlyPrompts: (v) => set({ cacheFriendlyPrompts: v }),
+      compactionKeepPercent: 50,
+      setCompactionKeepPercent: (n) => set({ compactionKeepPercent: Math.min(80, Math.max(25, Math.round(n) || 50)) }),
 
       autoDetectTasks: true,
       setAutoDetectTasks: (v) => set({ autoDetectTasks: v }),
@@ -502,6 +515,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       styleGuidance: '',
       avoidEmDashes: false,
+      replaceEmDashes: true,
+      setReplaceEmDashes: (v) => set({ replaceEmDashes: v }),
       setStyleGuidance: (v) => set({ styleGuidance: v }),
       setAvoidEmDashes: (v) => set({ avoidEmDashes: v }),
       slowBurnPacing: true,

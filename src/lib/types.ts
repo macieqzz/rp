@@ -243,6 +243,8 @@ export type ItemEffect =
   | { kind: 'relationship'; dimension: 'affection' | RelationshipDimension; amount: number }
   | { kind: 'flag'; flag: SceneFlag }
   | { kind: 'currency'; amount: number }
+  /** Sets the character's current mood (food, a quiet walk, a warm can of tea). Replaces whatever read was there. */
+  | { kind: 'mood'; mood: CharacterMood }
   /**
    * Several of the above at once, applied in order. Most things a consumable naturally wants to do
    * are two-part — a long walk home takes the tension out *and* leaves you closer — and modelling

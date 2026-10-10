@@ -10,6 +10,8 @@ import {
   findSlopAcross,
   isDuplicateOfRecentText,
   isVerbatimEcho,
+  stripThinkBlocks,
+  replaceEmDashes,
   trimToLastSentence,
 } from './slop'
 
@@ -366,5 +368,43 @@ describe('isDuplicateOfRecentText', () => {
   it('is insensitive to whitespace differences between what was stored and what was just produced', () => {
     const withDifferentSpacing = oldCharTurn.replace(/\s+/g, '\n')
     expect(isDuplicateOfRecentText(withDifferentSpacing, [oldCharTurn])).toBe(true)
+  })
+})
+
+describe('stripThinkBlocks', () => {
+  it("removes Gemma 4's empty thought channel and a filled one", () => {
+    expect(stripThinkBlocks('<|channel>thought\n<channel|>Hello there.')).toBe('Hello there.')
+    expect(stripThinkBlocks('<|channel>thought\nlet me think<channel|>{"a":1}')).toBe('{"a":1}')
+  })
+  it('removes <think> blocks and leaves ordinary text alone', () => {
+    expect(stripThinkBlocks('<think>x</think>Answer')).toBe('Answer')
+    expect(stripThinkBlocks('Plain reply.')).toBe('Plain reply.')
+  })
+})
+
+describe('replaceEmDashes', () => {
+  it('turns a mid-sentence dash into a comma and a paired aside into two', () => {
+    expect(replaceEmDashes('She turned—slowly—and left.')).toBe('She turned, slowly, and left.')
+    expect(replaceEmDashes('Wait — what?')).toBe('Wait, what?')
+  })
+
+  it('turns an interrupted line into an ellipsis', () => {
+    expect(replaceEmDashes('"I just—"')).toBe('"I just..."')
+    expect(replaceEmDashes('*She starts to say something—*')).toBe('*She starts to say something...*')
+    expect(replaceEmDashes('And then—')).toBe('And then...')
+  })
+
+  it('does not leave doubled punctuation behind', () => {
+    expect(replaceEmDashes('No—, really.')).toBe('No, really.')
+    expect(replaceEmDashes('Stop —.')).toBe('Stop.')
+  })
+
+  it('leaves en dashes and hyphens alone', () => {
+    expect(replaceEmDashes('pages 3–5, well-known')).toBe('pages 3–5, well-known')
+  })
+
+  it('is applied by cleanModelOutput only when asked', () => {
+    expect(cleanModelOutput('Fine—whatever.')).toContain('—')
+    expect(cleanModelOutput('Fine—whatever.', { replaceEmDashes: true })).toBe('Fine, whatever.')
   })
 })

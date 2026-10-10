@@ -40,22 +40,22 @@ export function describeMomentum(momentum: number | undefined): string | undefin
 /** Pacing clause folded into `buildRelationshipDescription`. Real names, no macros. `undefined` when there's nothing worth saying. */
 export function relationshipPacingNote(charName: string, warmth: number, momentum: number, tension: number): string | undefined {
   if (tension >= 55 && warmth >= 45) {
-    return `There's been real friction lately, running right alongside the closeness — both are true at once. Don't smooth it over, and don't let accumulated warmth make ${charName} more romantically receptive than the current strain would allow.`
+    return `There's been real friction lately, running right alongside the closeness, both are true at once. Don't smooth it over, and don't let accumulated warmth make ${charName} more romantically receptive than the current strain would allow.`
   }
   if (momentum >= 2) {
-    return `The relationship has moved fast these last few exchanges. ${charName} is more likely to want to slow down and let it settle than to keep accelerating — treat the recent momentum as something that might need a beat to catch up to, not a standing invitation for more.`
+    return `The relationship has moved fast these last few exchanges. ${charName} is more likely to want to slow down and let it settle than to keep accelerating, treat the recent momentum as something that might need a beat to catch up to, not a standing invitation for more.`
   }
   if (momentum <= -1.5) {
-    return `The last few exchanges have cooled things off. Right now ${charName} is more guarded and less open than the overall closeness would suggest — that recent cooling is the more current read of where they actually are.`
+    return `The last few exchanges have cooled things off. Right now ${charName} is more guarded and less open than the overall closeness would suggest, that recent cooling is the more current read of where they actually are.`
   }
   if (momentum >= 0.8) {
-    return `Things have been genuinely warming lately and moving in a good direction — ${charName} can let that show.`
+    return `Things have been genuinely warming lately and moving in a good direction, ${charName} can let that show.`
   }
   if (momentum <= -0.5) {
-    return `Things have drifted a little flat or distant in the last few exchanges — not a crisis, just a cooler stretch than the numbers alone would say.`
+    return `Things have drifted a little flat or distant in the last few exchanges, not a crisis, just a cooler stretch than the numbers alone would say.`
   }
   if (warmth >= 50) {
-    return `Things have been steady and comfortable lately, not pushing forward, and that's fine — not every stretch of a relationship has to escalate. ${charName} doesn't need to manufacture a new development this turn.`
+    return `Things have been steady and comfortable lately, not pushing forward, and that's fine, not every stretch of a relationship has to escalate. ${charName} doesn't need to manufacture a new development this turn.`
   }
   return undefined
 }
@@ -86,10 +86,10 @@ export function describeInitiativeBalance(balance: number | undefined): string |
 /** `{{user}}`/`{{char}}` macro version, read into `buildRelationshipDescription`'s macro-substituted output. `undefined` below the threshold — most of the time. */
 export function asymmetricPacingNote(charName: string, balance: number): string | undefined {
   if (balance >= 2) {
-    return `${charName} has been more reserved than {{user}} has lately — {{user}}'s the one who keeps reaching first, without much coming back the other way. That's not nothing; it can read as real hesitation worth letting show, not just quiet shyness to smooth over.`
+    return `${charName} has been more reserved than {{user}} has lately, {{user}}'s the one who keeps reaching first, without much coming back the other way. That's not nothing; it can read as real hesitation worth letting show, not just quiet shyness to smooth over.`
   }
   if (balance <= -2) {
-    return `${charName} has actually been the one initiating more than {{user}} lately — worth reflecting that ${charName} isn't only reacting here, they're the one closing the distance right now.`
+    return `${charName} has actually been the one initiating more than {{user}} lately, worth reflecting that ${charName} isn't only reacting here, they're the one closing the distance right now.`
   }
   return undefined
 }

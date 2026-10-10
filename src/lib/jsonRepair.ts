@@ -21,8 +21,13 @@ export function parseLenientJson(raw: string): unknown {
   throw lastError instanceof Error ? lastError : new Error('Could not parse JSON from model output')
 }
 
+/** A model writing a signed delta emits `"tension":+2`, which JSON forbids; a `+` right after a colon is never meaningful. */
+function stripLeadingPlus(json: string): string {
+  return json.replace(/(:\s*)\+(?=\d)/g, '$1')
+}
+
 function repairPipeline(json: string): string {
-  const quotesNormalized = normalizeQuotes(json)
+  const quotesNormalized = stripLeadingPlus(normalizeQuotes(json))
   // Must run before repairUnescapedQuotes — that pass would otherwise read a key genuinely followed by a bracket as "not really closed" and escape it into a never-ending string.
   const colonsInserted = insertMissingColons(quotesNormalized)
   const quotesRepaired = repairUnescapedQuotes(colonsInserted)

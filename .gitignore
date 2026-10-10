@@ -19,3 +19,11 @@ tools/comfy/backups/
 
 # Local Comfy MCP registration — hardcodes this machine's absolute paths (see tools/comfy/README.md)
 .mcp.json
+
+# Local working notes: playtest logs, fix lists, catalog brainstorming (referenced from ROADMAP.md, kept out of the repo)
+CATALOG_IDEAS.md
+FIXES_TODO.md
+PLAYTHROUGH_REPORT.md
+
+# Editor-generated caches
+.vscode/

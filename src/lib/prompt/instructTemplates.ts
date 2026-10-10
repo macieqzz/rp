@@ -7,6 +7,8 @@ export interface InstructTemplate {
   userSuffix: string
   assistantPrefix: string
   assistantSuffix: string
+  /** Replaces `assistantPrefix` only on the generation cue (the open turn the model continues), not on past turns — for a format whose own template ends the prompt differently from how finished turns read. */
+  assistantCuePrefix?: string
   stopSequences: string[]
   /** Wraps names (e.g. "### {name}:") — {name} is substituted per-turn. */
   namesInPrompt: boolean
@@ -61,6 +63,20 @@ export const BUILTIN_INSTRUCT_TEMPLATES: InstructTemplate[] = [
     assistantPrefix: '<start_of_turn>model\n{name}: ',
     assistantSuffix: '<end_of_turn>\n',
     stopSequences: ['<end_of_turn>', '<start_of_turn>'],
+    namesInPrompt: true,
+  },
+  {
+    id: 'gemma4',
+    name: 'Gemma 4',
+    // Gemma 4: `<|turn>`/`<turn|>` tokens, a real system role, and an empty thought channel on the reply cue only.
+    systemPrefix: '<|turn>system\n',
+    systemSuffix: '<turn|>\n',
+    userPrefix: '<|turn>user\n{name}: ',
+    userSuffix: '<turn|>\n',
+    assistantPrefix: '<|turn>model\n{name}: ',
+    assistantSuffix: '<turn|>\n',
+    assistantCuePrefix: '<|turn>model\n<|channel>thought\n<channel|>{name}: ',
+    stopSequences: ['<turn|>', '<|turn>'],
     namesInPrompt: true,
   },
   {
@@ -187,7 +203,7 @@ export function getInstructTemplate(id: string): InstructTemplate {
  * (empty affixes), same as the main reply path.
  */
 export function wrapAssistPrompt(prompt: string, template: InstructTemplate): string {
-  const openingCue = template.assistantPrefix.replace('{name}: ', '').replace('{name}', '')
+  const openingCue = (template.assistantCuePrefix ?? template.assistantPrefix).replace('{name}: ', '').replace('{name}', '')
   return `${template.systemPrefix}${prompt}${template.systemSuffix}${openingCue}`
 }
 
@@ -218,6 +234,8 @@ export function resolveInstructTemplate(id: string, customTemplates: InstructTem
 export function detectInstructTemplateId(chatTemplate: string | null | undefined): string | null {
   if (!chatTemplate || typeof chatTemplate !== 'string') return null
   const t = chatTemplate
+  // Gemma 4's `<|turn>` markers are checked first: its template doesn't contain Gemma's older `<start_of_turn>`.
+  if ((t.includes('<|turn>') && t.includes('<turn|>')) || (/gemma[\s-]?4/i.test(t) && !t.includes('<start_of_turn>'))) return 'gemma4'
   if (t.includes('<start_of_turn>') || /\bgemma\b/i.test(t)) return 'gemma'
   if (t.includes('<|start_header_id|>') || /\bllama[-\s]?3\b/i.test(t)) return 'llama3'
   if (t.includes('<|im_start|>') || /\bchat\s?ml\b/i.test(t)) return 'chatml'

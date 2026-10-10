@@ -18,6 +18,8 @@ const STARTER_STYLE_NOTES =
 export function WritingStyleSection() {
   const avoidEmDashes = useSettingsStore((s) => s.avoidEmDashes)
   const setAvoidEmDashes = useSettingsStore((s) => s.setAvoidEmDashes)
+  const replaceEmDashes = useSettingsStore((s) => s.replaceEmDashes)
+  const setReplaceEmDashes = useSettingsStore((s) => s.setReplaceEmDashes)
   const styleGuidance = useSettingsStore((s) => s.styleGuidance)
   const setStyleGuidance = useSettingsStore((s) => s.setStyleGuidance)
   const regexScripts = useSettingsStore((s) => s.regexScripts)
@@ -56,6 +58,12 @@ export function WritingStyleSection() {
         onChange={toggleAvoidEmDashes}
         label="Avoid em dashes"
         description="Steers the model away from them, and also strips any that slip through via a managed regex rule (Settings → Generation → Regex scripts)"
+      />
+      <Toggle
+        checked={replaceEmDashes}
+        onChange={setReplaceEmDashes}
+        label="Clean up em dashes in replies"
+        description="Rewrites any em dash that slips through into a comma, or an ellipsis when a line is cut off mid-thought. Applied once, before the reply is stored."
       />
       <TextAreaField
         label="Additional style notes"

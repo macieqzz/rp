@@ -27,6 +27,7 @@ import { SystemPromptSection } from './SystemPromptSection'
 import { WritingStyleSection } from './WritingStyleSection'
 import { QuickRepliesSection } from './QuickRepliesSection'
 import { ChatCompletionSamplerSection } from './ChatCompletionSamplerSection'
+import { ComputeUsage } from './ComputeUsage'
 
 const ADVANCED_FIELDS: { key: string; label: string; step?: number; min?: number; max?: number }[] = [
   { key: 'temperature', label: 'Temperature', step: 0.01, min: 0 },
@@ -61,6 +62,10 @@ export function SamplingControls() {
   const setAutoSummarize = useSettingsStore((s) => s.setAutoSummarize)
   const keepRecentMessages = useSettingsStore((s) => s.keepRecentMessages)
   const setKeepRecentMessages = useSettingsStore((s) => s.setKeepRecentMessages)
+  const cacheFriendlyPrompts = useSettingsStore((s) => s.cacheFriendlyPrompts)
+  const setCacheFriendlyPrompts = useSettingsStore((s) => s.setCacheFriendlyPrompts)
+  const compactionKeepPercent = useSettingsStore((s) => s.compactionKeepPercent)
+  const setCompactionKeepPercent = useSettingsStore((s) => s.setCompactionKeepPercent)
   const summaryDetail = useSettingsStore((s) => s.summaryDetail)
   const setSummaryDetail = useSettingsStore((s) => s.setSummaryDetail)
   const autoDetectTasks = useSettingsStore((s) => s.autoDetectTasks)
@@ -147,11 +152,20 @@ export function SamplingControls() {
 
       <Section
         title="Background AI assists"
-        description="Four independent toggles below (relationship tracking, choices, task detection, summarization) each fire their own model call after a reply: useful signal, but a real cost on a local single-GPU server, where they queue with each other and ahead of your next message. These two are a shortcut to set all four at once; each stays individually adjustable in its own section below either way."
+        description="Four independent toggles below (relationship tracking, choices, task detection, summarization) each fire their own model call after a reply: useful signal, but a real cost on a local single-GPU server, where they queue with each other and ahead of your next message. These are shortcuts to set all four at once (Lean keeps tracking and memory but only suggests replies when you tap the button, the cheapest of the four to skip); each stays individually adjustable in its own section below either way."
       >
         <div className="flex gap-2">
           <Chip on={allAssistsOn} onClick={() => setAllAssists(true)}>
             All assists on
+          </Chip>
+          <Chip
+            on={!allAssistsOn && !allAssistsOff && autoSummarize && autoTrackRelationship && !autoSuggestChoices}
+            onClick={() => {
+              setAllAssists(true)
+              setAutoSuggestChoices(false)
+            }}
+          >
+            Lean (choices on request)
           </Chip>
           <Chip on={allAssistsOff} onClick={() => setAllAssists(false)}>
             Minimal (all off)
@@ -213,16 +227,35 @@ export function SamplingControls() {
           label="Auto-summarize older history"
           description="One model call, but only once enough new history has built up (not every reply), plus immediately if a turn is about to overflow the context limit"
         />
-        <Slider
-          label="Keep verbatim"
-          min={4}
-          max={40}
-          step={2}
-          value={keepRecentMessages}
-          onChange={setKeepRecentMessages}
-          formatValue={(v) => `${v} messages`}
-          description="Recent messages kept word-for-word; anything older gets summarized"
+        <Toggle
+          checked={cacheFriendlyPrompts}
+          onChange={setCacheFriendlyPrompts}
+          label="Reuse the model's cache between turns"
+          description="Keeps the start of every prompt identical from turn to turn so the model only reads what's new, and folds old chat into the summary in rare large steps instead of every few turns. Much less GPU time per reply, and it keeps more recent chat verbatim. Pair it with --smartcache in KoboldCpp (see the README)."
         />
+        {cacheFriendlyPrompts ? (
+          <Slider
+            label="Keep after compaction"
+            min={25}
+            max={80}
+            step={5}
+            value={compactionKeepPercent}
+            onChange={setCompactionKeepPercent}
+            formatValue={(v) => `${v}% of the window`}
+            description="The chat fills the context window, then the oldest part is summarized down to this much. Lower means fewer, bigger compactions (cheaper); higher keeps more word-for-word chat but compacts more often."
+          />
+        ) : (
+          <Slider
+            label="Keep verbatim"
+            min={4}
+            max={40}
+            step={2}
+            value={keepRecentMessages}
+            onChange={setKeepRecentMessages}
+            formatValue={(v) => `${v} messages`}
+            description="Recent messages kept word-for-word; anything older gets summarized"
+          />
+        )}
         <div className="pt-3">
           <div className="mb-1.5 text-sm text-text">Summary detail</div>
           <div className="flex gap-2">
@@ -337,6 +370,8 @@ export function SamplingControls() {
           description="One model call after each reply. Same as relationship tracking, it shares the GPU with your next message. Turn it off for pure freeform writing."
         />
       </Section>
+
+      <ComputeUsage />
 
       <QuickRepliesSection />
 

@@ -6,6 +6,7 @@ import type { CustomSceneFlag, GiftItem, GiftRarity, ItemDef, ItemEffect, Relati
 import { fileToDataUrl } from '@/lib/characters/importExport'
 import { DEFAULT_BACKGROUNDS, DEFAULT_BACKGROUND_IDS, slugifyBackgroundId, type CustomBackground } from '@/lib/vn/backgrounds'
 import { BGM_DEFAULT_KEY, SCENE_MOODS } from '@/lib/vn/moods'
+import { MOOD_VOCAB, type CharacterMood } from '@/lib/prompt/mindGuidance'
 import { combinedSceneFlags, COMMITMENT_ORDER, formatCommitmentStatus, formatRelationshipStage, RELATIONSHIP_MILESTONES } from '@/lib/dating/stage'
 import { intimacyArousalWeight, type IntimacyCategory, type IntimacyUnlockable } from '@/lib/dating/intimacyCatalog'
 import { BODY_REGIONS } from '@/lib/dating/arousal'
@@ -353,7 +354,9 @@ function WorldEditor({
         ? { kind: 'flag', flag: 'first_date' }
         : kind === 'currency'
           ? { kind: 'currency', amount: 5 }
-          : { kind: 'relationship', dimension: 'affection', amount: 1 }
+          : kind === 'mood'
+            ? { kind: 'mood', mood: 'content' }
+            : { kind: 'relationship', dimension: 'affection', amount: 1 }
     updateItem(id, { effect: next })
   }
   const setItemEffectField = (id: string, patch: Partial<ItemEffect>) =>
@@ -1043,6 +1046,7 @@ function WorldEditor({
                       <option value="relationship">Relationship boost</option>
                       <option value="flag">Set scene flag</option>
                       <option value="currency">Grant coins</option>
+                      <option value="mood">Set mood</option>
                     </SelectField>
                     {item.effect.kind === 'relationship' && (
                       <>
@@ -1081,6 +1085,19 @@ function WorldEditor({
                         {combinedSceneFlags(customSceneFlags).map((f) => (
                           <option key={f.id} value={f.id}>
                             {f.label}
+                          </option>
+                        ))}
+                      </SelectField>
+                    )}
+                    {item.effect.kind === 'mood' && (
+                      <SelectField
+                        label="Mood"
+                        value={item.effect.mood}
+                        onChange={(e) => setItemEffectField(item.id, { mood: e.target.value as CharacterMood })}
+                      >
+                        {MOOD_VOCAB.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
                           </option>
                         ))}
                       </SelectField>

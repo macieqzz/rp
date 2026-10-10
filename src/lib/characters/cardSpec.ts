@@ -75,6 +75,8 @@ export interface LorebookEntry {
   case_sensitive?: boolean
   /** Mirrors ST's always/when-relevant/manual radio; kept in sync with `constant`. */
   activationMode?: WorldInfoActivationMode
+  /** App-only: content that changes between turns even though it's always on (remembered facts). Cache-friendly prompts place it after the history rather than in the stable prefix. */
+  volatile?: boolean
   /** 0-100 odds a keyword match fires; doesn't apply to always/manual entries (see activation.ts). */
   probability?: number
   /** Entries sharing a non-empty group name are mutually exclusive — only one fires. */

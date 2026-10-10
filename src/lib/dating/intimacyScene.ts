@@ -657,12 +657,12 @@ export function resolvedSceneFlags(scene: IntimacyScene, optionId: string): stri
 function paceClauseFor(pace: IntimacyPace, phase: IntimacyPhase): string {
   if (pace === 'reserved') {
     return phase === 'building'
-      ? " Given who they are right now, this is taking longer to build than it might for someone more at ease — small hesitations, needing a moment, or checking in first are the natural, in-character read here, not a flaw in the scene."
-      : " Even here at the peak, some of that same carefulness can still show through — reaching this point took more for them than it would for someone less guarded, and that can still color how they experience it."
+      ? " Given who they are right now, this is taking longer to build than it might for someone more at ease, small hesitations, needing a moment, or checking in first are the natural, in-character read here, not a flaw in the scene."
+      : " Even here at the peak, some of that same carefulness can still show through, reaching this point took more for them than it would for someone less guarded, and that can still color how they experience it."
   }
   if (pace === 'eager') {
     return phase === 'building'
-      ? " Given who they are right now, they lean into this more readily than someone more guarded would — quicker to let go of hesitation, without skipping real consent or care."
+      ? " Given who they are right now, they lean into this more readily than someone more guarded would, quicker to let go of hesitation, without skipping real consent or care."
       : ''
   }
   return ''
@@ -680,10 +680,10 @@ function repetitionClause(scene: IntimacyScene): string {
   const arousal = arousalOf(scene)
   const worn = habituatedRegion(arousal)
   if (worn) {
-    return ` ${regionLabel(worn)} has been the focus for several turns running now and isn't producing much of a response any more — move somewhere else, or change what's being done, rather than repeating the same beat.`
+    return ` ${regionLabel(worn)} has been the focus for several turns running now and isn't producing much of a response any more, move somewhere else, or change what's being done, rather than repeating the same beat.`
   }
   if (scene.updatedAtTurn - arousal.bandSinceTurn < PROLONGED_BAND_TURNS) return ''
-  return ` This has held at the same level for a few turns running now — let something actually shift (pace, depth, a brief pause, a change of angle) rather than repeating the same beat over again.`
+  return ` This has held at the same level for a few turns running now, let something actually shift (pace, depth, a brief pause, a change of angle) rather than repeating the same beat over again.`
 }
 
 /**
@@ -695,10 +695,10 @@ function repetitionClause(scene: IntimacyScene): string {
 function stanceClause(scene: IntimacyScene): string {
   const valence = scene.activityValence ?? 0
   if (valence <= -1) {
-    return ` This is not something they're actually into. That doesn't mean refusing outright, but it does mean it reads on them — going along with it rather than wanting it, a beat of hesitation, or saying so out loud are all more in character here than enthusiasm would be.`
+    return ` This is not something they're actually into. That doesn't mean refusing outright, but it does mean it reads on them, going along with it rather than wanting it, a beat of hesitation, or saying so out loud are all more in character here than enthusiasm would be.`
   }
   if (valence >= 2) {
-    return ` This is something they're genuinely eager for, and that can show — more forward, less hesitation, more willing to ask for what they want than they might usually be.`
+    return ` This is something they're genuinely eager for, and that can show, more forward, less hesitation, more willing to ask for what they want than they might usually be.`
   }
   return ''
 }
@@ -707,13 +707,13 @@ function stanceClause(scene: IntimacyScene): string {
  *  running ahead of a decision that hasn't been made yet. */
 function pendingChoiceClause(scene: IntimacyScene): string {
   if (!scene.pendingChoice) return ''
-  return ` The scene has reached a point where what happens next isn't yours to decide — stay in this moment, draw it out, and don't move things on to whatever might come after it yet.`
+  return ` The scene has reached a point where what happens next isn't yours to decide, stay in this moment, draw it out, and don't move things on to whatever might come after it yet.`
 }
 
 /** A stage past its authored soft cap — a nudge toward moving on, never a block on staying. */
 function overstayClause(scene: IntimacyScene, graph: ScenarioGraph): string {
   return stageOverstayed(stageOf(scene, graph), turnsInStage(scene, scene.updatedAtTurn))
-    ? ` This part of the scene has run longer than it usually would — it's a natural point for things to move on to what comes next, if the moment supports it.`
+    ? ` This part of the scene has run longer than it usually would, it's a natural point for things to move on to what comes next, if the moment supports it.`
     : ''
 }
 
@@ -729,11 +729,11 @@ export function intimacySceneGuidance(
   pace: IntimacyPace = 'neutral',
   graph: ScenarioGraph = DEFAULT_SCENARIO,
 ): string {
-  const continuity = `Stay continuous with what the scene state says ${charName} is physically in the middle of, until something in the scene actually changes it — don't quietly drift to a different position or act, and don't re-describe getting into it as if it just started.`
+  const continuity = `Stay continuous with what the scene state says ${charName} is physically in the middle of, until something in the scene actually changes it, don't quietly drift to a different position or act, and don't re-describe getting into it as if it just started.`
   const pacing =
     scene.phase === 'building'
       ? "This is still building, not at its peak yet. Let anticipation, teasing, and the slow accumulation of touch and reaction carry the scene rather than jumping straight to full intensity."
-      : "This has built to its peak. Let the intensity actually read as that — more urgency, less restraint, reactions less composed than a moment ago."
+      : "This has built to its peak. Let the intensity actually read as that, more urgency, less restraint, reactions less composed than a moment ago."
   return `${continuity} ${pacing}${paceClauseFor(pace, scene.phase)}${stanceClause(scene)}${repetitionClause(scene)}${overstayClause(scene, graph)}${pendingChoiceClause(scene)}`
 }
 
@@ -742,7 +742,7 @@ export function intimacySceneGuidance(
  *  and the meter can never disagree about whether the gap is real. */
 export function intimacyConsentTensionGuidance(charName: string, comfort: number, chemistry: number): string | undefined {
   if (!isConsentTension(comfort, chemistry)) return undefined
-  return `Right now ${charName}'s comfort is trailing well behind the physical chemistry in this scene — the spark is real, but ease and readiness aren't fully there yet. That's worth letting show: a beat of hesitation, an unprompted check-in, or ${charName} naming the mismatch out loud is the right call here, not something to override just because the moment has its own momentum.`
+  return `Right now ${charName}'s comfort is trailing well behind the physical chemistry in this scene, the spark is real, but ease and readiness aren't fully there yet. That's worth letting show: a beat of hesitation, an unprompted check-in, or ${charName} naming the mismatch out loud is the right call here, not something to override just because the moment has its own momentum.`
 }
 
 const ANTICIPATION_FLOOR = 55
@@ -750,7 +750,7 @@ const ANTICIPATION_FLOOR = 55
 /** Pre-scene anticipation nudge once chemistry and comfort are both already high and nothing physical has started. */
 export function intimacyAnticipationGuidance(charName: string, userName: string, chemistry: number, comfort: number): string | undefined {
   if (chemistry < ANTICIPATION_FLOOR || comfort < ANTICIPATION_FLOOR) return undefined
-  return `Nothing physical has started yet, but the chemistry and ease between ${charName} and ${userName} are both genuinely high right now — this reads like a scene heading toward an intimate turn on its own momentum. If it naturally moves that way, let the anticipation build honestly (lingering attention, small charged pauses, a held breath) rather than forcing the escalation early or flattening the charge that's already there.`
+  return `Nothing physical has started yet, but the chemistry and ease between ${charName} and ${userName} are both genuinely high right now, this reads like a scene heading toward an intimate turn on its own momentum. If it naturally moves that way, let the anticipation build honestly (lingering attention, small charged pauses, a held breath) rather than forcing the escalation early or flattening the charge that's already there.`
 }
 
 // Explicit-tier-only prose tells — kept separate from `mindGuidance.ts`'s pre-sex STOCK_ROMANCE_PHRASES.
@@ -790,19 +790,19 @@ export function explicitSceneGuidance(
   const mechanics =
     phase === 'peak'
       ? [
-          `Follow the physical sequence in order rather than skipping stages: resistance, then it gives, the first inches, then real depth — and once actually deep, movement itself changes (shorter strokes, grinding, a beat where nothing moves at all) rather than continuing exactly as it started. Give ${charName}'s hips, thighs, hands, and breath something concrete to be doing at each stage, not just once at the end.`,
-          `The edge has its own order too, and none of it gets skipped: rhythm that keeps breaking, involuntary clenching, breath that won't stay even, control over voice or movement starting to slip — all of that has to actually appear before anything is named as climax. Don't jump straight from "still building" to climax language.`,
-          `When it actually hits, write what ${charName}'s body does — clamping down, pulsing, a sound that isn't a word, pulling ${userName} deeper or needing them to go completely still — instead of a metaphor for the feeling. Right after, the body doesn't just reset: oversensitive, still twitching, unsteady, a few seconds where talking normally isn't quite possible yet.`,
-          `Once at peak, intensity doesn't have to sit at maximum in every single sentence — it can ease off for a few beats (slower, deeper, a full stop) and build again, the way it actually would, rather than reading as one flat wall of "as hard as possible" start to finish.`,
-          `The same specificity applies to any other touch in the scene, not only penetration — a hand or mouth on breasts, nipples, or anywhere else should register as pressure, a twist, a pull, with a direct physical answer (arching in, a flinch, an involuntary clench), never a vague "played with her" summary.`,
+          `Follow the physical sequence in order rather than skipping stages: resistance, then it gives, the first inches, then real depth, and once actually deep, movement itself changes (shorter strokes, grinding, a beat where nothing moves at all) rather than continuing exactly as it started. Give ${charName}'s hips, thighs, hands, and breath something concrete to be doing at each stage, not just once at the end.`,
+          `The edge has its own order too, and none of it gets skipped: rhythm that keeps breaking, involuntary clenching, breath that won't stay even, control over voice or movement starting to slip, all of that has to actually appear before anything is named as climax. Don't jump straight from "still building" to climax language.`,
+          `When it actually hits, write what ${charName}'s body does, clamping down, pulsing, a sound that isn't a word, pulling ${userName} deeper or needing them to go completely still, instead of a metaphor for the feeling. Right after, the body doesn't just reset: oversensitive, still twitching, unsteady, a few seconds where talking normally isn't quite possible yet.`,
+          `Once at peak, intensity doesn't have to sit at maximum in every single sentence, it can ease off for a few beats (slower, deeper, a full stop) and build again, the way it actually would, rather than reading as one flat wall of "as hard as possible" start to finish.`,
+          `The same specificity applies to any other touch in the scene, not only penetration, a hand or mouth on breasts, nipples, or anywhere else should register as pressure, a twist, a pull, with a direct physical answer (arching in, a flinch, an involuntary clench), never a vague "played with her" summary.`,
         ].join(' ')
-      : `Let the buildup show in the body, not just the mood — resistance easing, first reactions to touch, breath changing, small adjustments — rather than skipping ahead to full intensity before it's actually been earned this scene.`
-  const antiPatterns = `Avoid stock explicit-writing tells here regardless of whether they've come up before in this chat — things like "${EXPLICIT_ANTI_PATTERNS.join('", "')}". Reach for one specific physical sensation instead (stretch, resistance, heat, pressure, friction, a pulse) rather than an emotion word or a metaphor standing in for one.`
+      : `Let the buildup show in the body, not just the mood, resistance easing, first reactions to touch, breath changing, small adjustments, rather than skipping ahead to full intensity before it's actually been earned this scene.`
+  const antiPatterns = `Avoid stock explicit-writing tells here regardless of whether they've come up before in this chat, things like "${EXPLICIT_ANTI_PATTERNS.join('", "')}". Reach for one specific physical sensation instead (stretch, resistance, heat, pressure, friction, a pulse) rather than an emotion word or a metaphor standing in for one.`
   const voiceNoteClause = voiceNote?.trim() ? ` For ${charName} specifically: ${voiceNote.trim()}` : ''
-  const voice = `${charName}'s established voice doesn't reset here — if they're normally clipped, sarcastic, or formal, that stays true under strain too; their sounds and word choice should still read as them, not a generic register swap into stock scene-narrator voice. The same goes for anything said out loud in the moment — dirty talk, begging, wordless sounds — keep it in ${charName}'s own register (short and broken, silent, or formal cracking under strain, whichever actually fits them) rather than switching to fluent, generic porn dialogue just because the scene turned explicit.${voiceNoteClause}`
+  const voice = `${charName}'s established voice doesn't reset here, if they're normally clipped, sarcastic, or formal, that stays true under strain too; their sounds and word choice should still read as them, not a generic register swap into stock scene-narrator voice. The same goes for anything said out loud in the moment, dirty talk, begging, wordless sounds, keep it in ${charName}'s own register (short and broken, silent, or formal cracking under strain, whichever actually fits them) rather than switching to fluent, generic porn dialogue just because the scene turned explicit.${voiceNoteClause}`
   const reservedClause =
     pace === 'reserved'
-      ? ` Given who ${charName} is right now, this still shows through even here: more checking in, smaller and less certain reactions, a real chance they need a moment or a full pause rather than just riding the momentum — dirty talk or a confident running commentary would read false for them unless that's genuinely who they are underneath it.`
+      ? ` Given who ${charName} is right now, this still shows through even here: more checking in, smaller and less certain reactions, a real chance they need a moment or a full pause rather than just riding the momentum, dirty talk or a confident running commentary would read false for them unless that's genuinely who they are underneath it.`
       : ''
   // The POV guard is carried once, canonically, by `mindGuidance.ts`'s `agencyGuardNote`, which
   // fires on every romantic/intimate moment (this scene included) — not repeated here.
@@ -811,7 +811,7 @@ export function explicitSceneGuidance(
 
 /** Immediate post-climax physical beat, fired alongside (not instead of) the content-agnostic `afterglowGuidance` when explicit content is on. */
 export function explicitAftercareGuidance(charName: string): string {
-  return `${charName}'s body doesn't reset the instant it's over — oversensitive, still twitching or pulsing faintly, legs or hands not quite steady, a few seconds where talking in full, composed sentences isn't really possible yet. Don't let ${charName} snap back to normal and conversational faster than a body actually would.`
+  return `${charName}'s body doesn't reset the instant it's over, oversensitive, still twitching or pulsing faintly, legs or hands not quite steady, a few seconds where talking in full, composed sentences isn't really possible yet. Don't let ${charName} snap back to normal and conversational faster than a body actually would.`
 }
 
 /** Recent resolved-scene category-sequences to remember, e.g. `['kissing_spot', 'position', 'toy']` per scene. */
@@ -835,5 +835,5 @@ function lastTwoShapesRepeated(log: string[][] | undefined): string[] | undefine
 export function repeatedEscalationShapeGuidance(charName: string, shapeLog: string[][] | undefined): string | undefined {
   const repeated = lastTwoShapesRepeated(shapeLog)
   if (!repeated) return undefined
-  return `The last two intimate scenes with ${charName} both moved through the exact same sequence (${repeated.join(' → ')}), start to finish. Let this one actually diverge somewhere — a different opening, a skipped or reordered step, something new — rather than tracing the identical curve a third time running.`
+  return `The last two intimate scenes with ${charName} both moved through the exact same sequence (${repeated.join(' → ')}), start to finish. Let this one actually diverge somewhere, a different opening, a skipped or reordered step, something new, rather than tracing the identical curve a third time running.`
 }

@@ -150,6 +150,10 @@ export interface PromptBuildInput {
   nextSpeakerName?: string
   /** Adds `sectionBreakdown` to the result (Prompt Inspector). Opt-in — costs extra `countTokens` calls. */
   includeSectionBreakdown?: boolean
+  /** Cache-friendly layout: summary last in the fixed block, keyword/fact lore after the history, so the prefix stays identical between turns. */
+  cacheFriendly?: boolean
+  /** Drop the oldest history this many messages at a time so the cached prefix holds still. 1/unset = slide continuously. */
+  historyTrimGrid?: number
 }
 
 export interface PromptSectionBreakdownItem {
@@ -173,6 +177,10 @@ export interface PromptBuildResult {
   sectionBreakdown?: PromptSectionBreakdownItem[]
   /** Sticky/cooldown state to persist for the next turn — undefined when `worldInfoState` wasn't passed in. */
   worldInfoState?: WorldInfoRuntimeState
+  /** Tokens history was allowed before trimming; compaction measures the verbatim window against this. */
+  historyCapacity: number
+  /** Tokens the included history turns actually used. */
+  historyTokens: number
   /** `systemText` and `conversationText` are the same two pieces joined into `prompt`, exposed separately for a hosted chat-completion backend that wants a proper system/user pair instead of one flat string. */
   systemText: string
   conversationText: string
@@ -207,8 +215,15 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
       ? { turn: input.worldInfoTurn ?? history.length, prevState: input.worldInfoState }
       : undefined,
   )
-  const before = activatedEntries.filter((e) => e.position !== 'after_char' && e.position !== 'at_depth')
-  const after = activatedEntries.filter((e) => e.position === 'after_char')
+  const cacheFriendly = !!input.cacheFriendly
+  // Keyword-fired and fact entries change per turn, so cache-friendly mode puts them after the history.
+  const isLate = (e: LorebookEntry) =>
+    cacheFriendly &&
+    e.position !== 'at_depth' &&
+    (e.volatile || (e.activationMode ?? (e.constant ? 'always' : 'keyword')) === 'keyword')
+  const lateEntries = activatedEntries.filter(isLate)
+  const before = activatedEntries.filter((e) => e.position !== 'after_char' && e.position !== 'at_depth' && !isLate(e))
+  const after = activatedEntries.filter((e) => e.position === 'after_char' && !isLate(e))
   const worldAtDepth = activatedEntries.filter((e) => e.position === 'at_depth')
 
   // Impersonation needs its own system block; the normal one tells the model to never write {{user}}.
@@ -259,9 +274,14 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
   const authorNotePosition = input.authorNote?.position ?? 'at_depth'
   const authorNoteDepth = Math.max(0, Math.floor(Number(input.authorNote?.depth) || 0))
 
+  const lateLoreBlock = lateEntries.length
+    ? `Relevant background to keep in mind:\n${lateEntries.map((e) => sub(e.content)).join('\n')}`
+    : ''
+  const summarySection = sections.summary ? summaryBlock : ''
+
   const fixedSections = [
     sections.system ? systemBlock : '',
-    sections.summary ? summaryBlock : '',
+    cacheFriendly ? '' : summarySection,
     sections.world ? worldBlock : '',
     worldBefore,
     authorNoteText && authorNotePosition === 'before_char' ? authorNoteText : '',
@@ -271,6 +291,8 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
     sections.persona ? personaBlock : '',
     exampleBlock,
     authorNoteText && authorNotePosition === 'after_char' ? authorNoteText : '',
+    // Changes only on compaction, so it goes last.
+    cacheFriendly ? summarySection : '',
   ].filter(Boolean)
   // Wrap everything above the chat history in the template's system/opening turn markers (a no-op for `plain-chat`).
   const fixedInner = fixedSections.join('\n\n')
@@ -278,6 +300,7 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
   const fixedTokens = await countTokens(fixedText)
   const authorNoteAtDepthTokens =
     authorNoteText && authorNotePosition === 'at_depth' ? await countTokens(authorNoteText) : 0
+  const lateLoreTokens = lateLoreBlock ? await countTokens(lateLoreBlock) : 0
 
   // World Info "@ Depth" entries — same at_depth injection mechanism as the Author's Note, but per-entry.
   const worldAtDepthItems = await Promise.all(
@@ -294,11 +317,13 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
   const continuedTurn = continuing ? history[history.length - 1] : null
   const historyForTrimming = continuing ? history.slice(0, -1) : history
 
-  const genCue = continuing
-    ? `${turnPrefix(continuedTurn!.role, continuedTurn!.name, template)}${applyRegexScripts(continuedTurn!.text, input.regexScripts, 'prompt')}`
+  // A trailing space on the cue makes the first token awkward (stray newlines/digits); end on the colon.
+  const genCueRaw = continuing
+    ? `${turnPrefix(continuedTurn!.role, continuedTurn!.name, template, true)}${applyRegexScripts(continuedTurn!.text, input.regexScripts, 'prompt')}`
     : input.impersonateAsUser
       ? turnPrefix('user', macroCtx.userName, template)
-      : turnPrefix('char', input.nextSpeakerName?.trim() || macroCtx.charName, template)
+      : turnPrefix('char', input.nextSpeakerName?.trim() || macroCtx.charName, template, true)
+  const genCue = continuing ? genCueRaw : genCueRaw.replace(/[ 	]+$/, '')
   const genCueTokens = await countTokens(genCue)
 
   // Injected right before generation, same late placement as post-history-instructions. Impersonation
@@ -344,7 +369,7 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
   const HISTORY_FLOOR_TOKENS = 300
   let styleGuidanceDroppedCount = 0
   while (
-    contextBudget - fixedTokens - postHistoryTokens - genCueTokens - authorNoteAtDepthTokens - worldAtDepthTokens <
+    contextBudget - fixedTokens - postHistoryTokens - genCueTokens - authorNoteAtDepthTokens - worldAtDepthTokens - lateLoreTokens <
     HISTORY_FLOOR_TOKENS
   ) {
     // Drop the least-essential item still standing. Items are dropped from the end of the
@@ -360,7 +385,8 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
   }
 
   let remaining =
-    contextBudget - fixedTokens - postHistoryTokens - genCueTokens - authorNoteAtDepthTokens - worldAtDepthTokens
+    contextBudget - fixedTokens - postHistoryTokens - genCueTokens - authorNoteAtDepthTokens - worldAtDepthTokens - lateLoreTokens
+  const historyCapacity = remaining
   const includedTurns: { text: string; tokens: number }[] = []
   let excludedCount = 0
 
@@ -375,7 +401,7 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
   // KoboldCpp), to count hundreds of turns that were never going to be included.
   for (let i = historyForTrimming.length - 1; i >= 0; i--) {
     const msg = historyForTrimming[i]
-    const rendered = renderTurn(msg, template, macroCtx, input.regexScripts)
+    const rendered = renderHistoryTurn(msg, template, macroCtx, input.regexScripts)
     const tokens = await countTokens(rendered)
     if (tokens > remaining && includedTurns.length > 0) {
       excludedCount += i + 1
@@ -385,6 +411,18 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
     remaining -= tokens
   }
   includedTurns.reverse()
+
+  // Advance the window start in whole grid steps; costs at most grid-1 turns of recall.
+  const grid = Math.max(1, Math.floor(input.historyTrimGrid ?? 1))
+  if (grid > 1 && excludedCount > 0) {
+    const extra = Math.min((grid - (excludedCount % grid)) % grid, includedTurns.length - 1)
+    if (extra > 0) {
+      includedTurns.splice(0, extra)
+      excludedCount += extra
+    }
+  }
+
+  const historyTokens = includedTurns.reduce((sum, t) => sum + t.tokens, 0)
 
   // "At depth" injection: each item drops in `depth` turns up from the latest (0 = right before the
   // generation cue). Sorted farthest-back first so each insertion point accounts for earlier ones.
@@ -398,15 +436,15 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
   }
 
   const historyText = includedTurns.map((t) => t.text).join('')
-  const tailParts = [historyText, postHistoryBlock].filter(Boolean)
+  const tailParts = [historyText, lateLoreBlock, postHistoryBlock].filter(Boolean)
   const tail = tailParts.length ? `${tailParts.join('\n\n')}\n\n${genCue}` : genCue
   const prompt = [fixedText, tail].filter(Boolean).join('\n\n')
   const tokensUsed =
-    fixedTokens + postHistoryTokens + genCueTokens + includedTurns.reduce((sum, t) => sum + t.tokens, 0)
+    fixedTokens + postHistoryTokens + genCueTokens + lateLoreTokens + includedTurns.reduce((sum, t) => sum + t.tokens, 0)
 
   let sectionBreakdown: PromptSectionBreakdownItem[] | undefined
   if (input.includeSectionBreakdown) {
-    const worldInfoBlock = [worldBefore, worldAfter].filter(Boolean).join('\n')
+    const worldInfoBlock = [worldBefore, worldAfter, lateLoreBlock].filter(Boolean).join('\n')
     const candidates: { id: string; label: string; text: string }[] = [
       { id: 'system', label: 'System prompt', text: sections.system ? systemBlock : '' },
       { id: 'summary', label: 'Long-term memory summary', text: sections.summary ? summaryBlock : '' },
@@ -441,6 +479,8 @@ export async function buildPrompt(input: PromptBuildInput): Promise<PromptBuildR
     styleGuidanceDroppedCount,
     sectionBreakdown,
     worldInfoState,
+    historyCapacity,
+    historyTokens,
     systemText: fixedText,
     conversationText: tail,
   }
@@ -473,12 +513,13 @@ function buildObjectiveBlock(
   return lines.filter(Boolean).join('\n')
 }
 
-function turnPrefix(role: 'user' | 'char', name: string, template: InstructTemplate): string {
-  const raw = role === 'user' ? template.userPrefix : template.assistantPrefix
+function turnPrefix(role: 'user' | 'char', name: string, template: InstructTemplate, cue = false): string {
+  const raw = role === 'user' ? template.userPrefix : cue ? (template.assistantCuePrefix ?? template.assistantPrefix) : template.assistantPrefix
   return template.namesInPrompt ? fillTemplate(raw, name) : raw
 }
 
-function renderTurn(
+/** One history message exactly as it appears in the prompt — what compaction counts tokens against. */
+export function renderHistoryTurn(
   msg: ChatMessage,
   template: InstructTemplate,
   macroCtx: { charName: string; userName: string },

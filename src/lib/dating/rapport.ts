@@ -29,7 +29,7 @@ export const RAPPORT_READS: Record<RapportTrajectory, RapportSpec> = {
   lighting_up: {
     label: 'lighting up',
     tone: 'up-strong',
-    judgeHint: 'clearly delighted — leaning in, initiating, visibly enjoying this',
+    judgeHint: 'clearly delighted, leaning in, initiating, visibly enjoying this',
   },
   warming: {
     label: 'warming to you',
@@ -39,7 +39,7 @@ export const RAPPORT_READS: Record<RapportTrajectory, RapportSpec> = {
   at_ease: {
     label: 'at ease',
     tone: 'flat',
-    judgeHint: 'comfortable and steady — neither pulling closer nor away, just present',
+    judgeHint: 'comfortable and steady, neither pulling closer nor away, just present',
   },
   pulling_back: {
     label: 'pulling back',
@@ -104,7 +104,7 @@ export async function assessRapport(
     `Recent turns:\n${transcriptText}`,
     `Pick the ONE label that fits how ${params.charName} is trending right now:`,
     RAPPORT_TRAJECTORIES.map((id) => `- ${id}: ${RAPPORT_READS[id].judgeHint}`).join('\n'),
-    `Also decide "walkOut": true ONLY if ${params.userName}'s latest turn is a genuine dealbreaker a reasonable person would leave over right now — overt hostility, cruelty, or an explicit/crude proposition. false for ordinary friction, awkwardness, a bad joke, or garden-variety "on_edge" tension. This should be rare.`,
+    `Also decide "walkOut": true ONLY if ${params.userName}'s latest turn is a genuine dealbreaker a reasonable person would leave over right now, overt hostility, cruelty, or an explicit/crude proposition. false for ordinary friction, awkwardness, a bad joke, or garden-variety "on_edge" tension. This should be rare.`,
     'Return ONLY a minified JSON object: {"trajectory":"<one label>","note":"<3-8 word in-world observation>","walkOut":true|false}.',
     'Example: {"trajectory":"warming","note":"her lecturing has lost its edge","walkOut":false}',
     'JSON:',

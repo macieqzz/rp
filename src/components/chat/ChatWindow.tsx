@@ -20,7 +20,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react'
-import { useChatSession } from '@/lib/hooks/useChatSession'
+import { effectiveAssistFlag, useChatSession } from '@/lib/hooks/useChatSession'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
 import { charactersApi, chatsApi } from '@/lib/api/client'
 import { IconButton } from '@/components/ui/IconButton'
@@ -51,6 +51,7 @@ import { LiveRapport } from './LiveRapport'
 import { StageMeter } from '@/components/ui/Stage'
 import type { MessageIntent } from '@/lib/dating/intent'
 import { GenerationHud } from './GenerationHud'
+import { ReactionFeed } from './ReactionFeed'
 import { Composer } from './Composer'
 import { ConnectionBadge } from './ConnectionBadge'
 import { PromptInspector } from './PromptInspector'
@@ -158,6 +159,7 @@ export function ChatWindow({
   const vnInputMode = useSettingsStore((s) => s.vnInputMode)
   const autoTrackRelationship = useSettingsStore((s) => s.autoTrackRelationship)
   const quickReplies = useSettingsStore((s) => s.quickReplies)
+  const autoSuggestChoicesGlobal = useSettingsStore((s) => s.autoSuggestChoices)
   const showGenerationHud = useSettingsStore((s) => s.showGenerationHud)
   const regexScripts = useSettingsStore((s) => s.regexScripts)
   const sfxBursts = useSettingsStore((s) => s.sfxBursts)
@@ -237,6 +239,17 @@ export function ChatWindow({
   useEffect(() => {
     if (highlightedId) scrollToMessage(scrollRef.current, highlightedId)
   }, [highlightedId])
+
+  // Esc stops a reply in progress, unless a dialog is open (it closes that instead).
+  useEffect(() => {
+    if (!isGenerating) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('[role="dialog"]')) return
+      abortGeneration()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isGenerating, abortGeneration])
 
   // Arrow-key swipe navigation on the latest reply; never triggers a new-swipe generation at the last index.
   useEffect(() => {
@@ -508,10 +521,37 @@ export function ChatWindow({
       />
     )
 
+  // With auto-suggest off, replies are generated only when asked for — one tap instead of a model call after every reply.
+  const lastMessage = messages[messages.length - 1]
+  const autoSuggestChoices = effectiveAssistFlag(chat?.assistOverrides?.autoSuggestChoices, autoSuggestChoicesGlobal)
+  const canSuggestOnDemand = !autoSuggestChoices && !activeChoices && !isGenerating && lastMessage?.role === 'char' && !!lastMessage.text.trim()
+  const suggestNode = (variant: 'default' | 'vn') =>
+    canSuggestOnDemand && (
+      <div className={variant === 'default' ? 'mx-auto w-full max-w-chat px-4 pb-2.5' : 'w-full'}>
+        <button
+          onClick={() => {
+            setRefreshingChoices(true)
+            regenerateChoices(lastMessage.id).finally(() => setRefreshingChoices(false))
+          }}
+          disabled={refreshingChoices}
+          className={`rounded-full px-3.5 py-1.5 text-sm transition-colors disabled:opacity-50 ${
+            variant === 'default'
+              ? 'bg-bg-elevated text-text-muted hover:bg-accent/10 hover:text-accent'
+              : 'vn-glass text-white/80 hover:bg-white/20 hover:text-white'
+          }`}
+        >
+          {refreshingChoices ? 'Thinking…' : '✦ Suggest replies'}
+        </button>
+      </div>
+    )
+
   const quickReplyNode = (variant: 'default' | 'vn') =>
     !activeChoices &&
     !isGenerating && (
-      <QuickReplyBar variant={variant} replies={quickReplies} onPick={(reply) => sendUserMessage(reply.message, [])} />
+      <>
+        {suggestNode(variant)}
+        <QuickReplyBar variant={variant} replies={quickReplies} onPick={(reply) => sendUserMessage(reply.message, [])} />
+      </>
     )
 
   // Intent chips: offered while relationship tracking is on for this chat (its override, else the
@@ -646,6 +686,7 @@ export function ChatWindow({
     // toward scrollWidth without it, causing a permanent horizontal scrollbar. Panels that need to
     // escape this box use position: fixed instead, which plain overflow doesn't clip.
     <div className="relative flex flex-1 flex-col min-w-0 overflow-hidden">
+      {chat && <ReactionFeed chatId={chat.id} variant={resolvedVisualNovelMode ? 'vn' : 'default'} />}
       {showFirstReplyTip && (
         // `fixed` (not `absolute`) so it floats consistently above whichever layout is active
         // (VNStage is full-bleed and doesn't otherwise have a slot for this) — same reasoning the
