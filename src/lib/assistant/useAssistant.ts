@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { assistantThreadsApi, charactersApi, instructTemplatesApi } from '@/lib/api/client'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
 import { createChatBackend } from '@/lib/api/createChatBackend'
+import { assistantModelFor } from '@/lib/hooks/useChatBackendClient'
 import { cleanModelOutput } from '@/lib/text/slop'
 import { newId } from '@/lib/id'
 import { errorMessage, toastError, toastSuccess } from '@/lib/store/useToastStore'
@@ -50,9 +51,9 @@ export function useAssistant(threadId: string | null, onThreadsChanged?: () => v
         baseUrl: settings.baseUrl,
         chatBackendBaseUrl: settings.chatBackendBaseUrl,
         chatBackendApiKey: settings.chatBackendApiKey,
-        chatBackendModel: settings.chatBackendModel,
+        chatBackendModel: assistantModelFor(settings.chatBackend, settings.assistantModel, settings.chatBackendModel),
       }),
-    [settings.chatBackend, settings.baseUrl, settings.chatBackendBaseUrl, settings.chatBackendApiKey, settings.chatBackendModel],
+    [settings.chatBackend, settings.baseUrl, settings.chatBackendBaseUrl, settings.chatBackendApiKey, settings.chatBackendModel, settings.assistantModel],
   )
 
   const load = useCallback(async (id: string) => {

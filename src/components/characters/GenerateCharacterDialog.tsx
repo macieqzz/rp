@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Dices, RefreshCw } from 'lucide-react'
-import { useChatBackendClient } from '@/lib/hooks/useChatBackendClient'
+import { useAssistantBackendClient } from '@/lib/hooks/useChatBackendClient'
 import type { CharacterCardData, Lorebook } from '@/lib/characters/cardSpec'
 import type { Outfit } from '@/lib/vn/outfits'
 import {
@@ -68,7 +68,7 @@ export function GenerateCharacterDialog({
   /** The currently-selected world's own description, if any — fits the draft to its tone/setting instead of inventing one that might contradict it. */
   worldTone?: string
 }) {
-  const client = useChatBackendClient()
+  const client = useAssistantBackendClient()
   const styleGuidance = useSettingsStore((s) => s.styleGuidance)
   const [mode, setMode] = useState<'brief' | 'portrait' | 'traits'>('brief')
   const [scope, setScope] = useState<'full' | 'card'>('full')

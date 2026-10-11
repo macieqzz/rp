@@ -60,6 +60,20 @@ export class OpenAICompatibleClient implements ChatBackend {
    */
   private usesMaxCompletionTokens = false
 
+  /**
+   * Some models can't run without their reasoning step (Claude Sonnet 5.5 on the Nous Portal, for
+   * one) and reject the `reasoning: {enabled: false}` sent by default with a 400 saying so. Same
+   * approach as `usesMaxCompletionTokens`: on that exact rejection, drop the field and redo the
+   * request, and keep it dropped for this instance's later calls. Without the field such a model
+   * reasons only as much as it decides to (live-verified: none at all for a short reply).
+   */
+  private reasoningMandatory = false
+
+  private isReasoningMandatoryError(message: string): boolean {
+    const m = message.toLowerCase()
+    return m.includes('reasoning') && m.includes('mandatory')
+  }
+
   private isMaxTokensParamError(message: string): boolean {
     const m = message.toLowerCase()
     return m.includes('max_tokens') && m.includes('max_completion_tokens')
@@ -98,7 +112,8 @@ export class OpenAICompatibleClient implements ChatBackend {
     // model); "Auto" — no explicit choice made — means "off" here, not "let the provider pick its own
     // default", because that default is what was silently eating the whole reply budget.
     if (speaksOpenRouterReasoning(this.baseUrl)) {
-      body.reasoning = params.reasoning_effort ? { effort: params.reasoning_effort } : { enabled: false }
+      if (params.reasoning_effort) body.reasoning = { effort: params.reasoning_effort }
+      else if (!this.reasoningMandatory) body.reasoning = { enabled: false }
     }
     // See `usesMaxCompletionTokens`'s doc comment — starts as the widely-supported `max_tokens`;
     // only becomes `max_completion_tokens` after that exact rejection has actually been seen.
@@ -148,14 +163,15 @@ export class OpenAICompatibleClient implements ChatBackend {
   /**
    * The fetch + error-classification shared by `generate` and `generateStream` — including the
    * one-time `max_tokens` -> `max_completion_tokens` retry (see `usesMaxCompletionTokens`'s doc
-   * comment). Returns an `ok` `Response` with its body untouched, for the caller to read as JSON or
+   * comment) and the one-time reasoning-is-mandatory retry (see `reasoningMandatory`'s). Returns an `ok` `Response` with its body untouched, for the caller to read as JSON or
    * as a stream; throws a `KoboldApiError` for anything that isn't recoverable this way.
    */
   private async postChatCompletion(params: GenerateRequest, stream: boolean, signal?: AbortSignal): Promise<Response> {
     const unreachableMessage = stream ? `Could not reach ${this.baseUrl} for streaming.` : `Could not reach ${this.baseUrl}. Is the base URL and network correct?`
     const failedMessage = stream ? 'Chat completion stream failed' : 'Chat completion failed'
 
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // One first try, plus at most one retry per recoverable rejection below.
+    for (let attempt = 0; attempt < 3; attempt++) {
       const rawBody = this.body(params, stream)
       const body = isOpenMayhem(this.baseUrl) ? await openMayhemRequestBody(rawBody) : rawBody
       let res: Response
@@ -168,8 +184,12 @@ export class OpenAICompatibleClient implements ChatBackend {
       if (res.ok) return res
 
       const errorText = (await this.parseErrorBody(res)).slice(0, 300)
-      if (attempt === 0 && !this.usesMaxCompletionTokens && this.isMaxTokensParamError(errorText)) {
+      if (!this.usesMaxCompletionTokens && this.isMaxTokensParamError(errorText)) {
         this.usesMaxCompletionTokens = true
+        continue
+      }
+      if (!this.reasoningMandatory && 'reasoning' in rawBody && this.isReasoningMandatoryError(errorText)) {
+        this.reasoningMandatory = true
         continue
       }
       const hint = res.status === 429 ? this.rateLimitHint(res) : ''

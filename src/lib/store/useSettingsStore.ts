@@ -277,6 +277,13 @@ interface SettingsState {
    */
   assistantSystemPrompt: string
   setAssistantSystemPrompt: (v: string) => void
+  /**
+   * Model for the Assistant view and character/lorebook generation, on the same hosted backend as
+   * chat (same base URL and key). Empty = use the chat model. Lets a stronger, slower model do the
+   * one-off creative work while roleplay stays on a fast one. Ignored by KoboldCpp and NovelAI.
+   */
+  assistantModel: string
+  setAssistantModel: (v: string) => void
   setSystemPrompt: (v: string) => void
   setPostHistoryInstructions: (v: string) => void
   /** User-saved {system prompt + post-history} pairs, shown as a picker in Settings → Generation. */
@@ -498,6 +505,8 @@ export const useSettingsStore = create<SettingsState>()(
       systemPrompt: '',
       postHistoryInstructions: '',
       assistantSystemPrompt: '',
+      assistantModel: '',
+      setAssistantModel: (v) => set({ assistantModel: v }),
       setAssistantSystemPrompt: (v) => set({ assistantSystemPrompt: v }),
       setSystemPrompt: (v) => set({ systemPrompt: v }),
       setPostHistoryInstructions: (v) => set({ postHistoryInstructions: v }),

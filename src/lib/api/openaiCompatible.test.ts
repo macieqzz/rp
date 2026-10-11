@@ -192,6 +192,23 @@ describe('OpenAICompatibleClient — request building', () => {
       expect(body.reasoning).toEqual({ enabled: false })
     })
 
+    it('retries without the reasoning field when the model says reasoning is mandatory, and remembers that', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse(400, { status: 400, message: 'Additional info: Reasoning is mandatory for this endpoint and cannot be disabled.' }))
+        .mockResolvedValue(jsonResponse(200, { choices: [{ message: { content: 'hi' } }] }))
+      vi.stubGlobal('fetch', fetchMock)
+      const client = new OpenAICompatibleClient('https://inference-api.nousresearch.com/v1', '', 'anthropic/claude-sonnet-5.5')
+
+      await expect(client.generate(BASE_REQUEST)).resolves.toBe('hi')
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).reasoning).toEqual({ enabled: false })
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).not.toHaveProperty('reasoning')
+
+      await client.generate(BASE_REQUEST)
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+      expect(JSON.parse(fetchMock.mock.calls[2][1].body as string)).not.toHaveProperty('reasoning')
+    })
+
     it('does not mistake a look-alike host for the real one', async () => {
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { choices: [{ message: { content: 'hi' } }] }))
       vi.stubGlobal('fetch', fetchMock)

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { RotateCcw } from 'lucide-react'
-import { useChatBackendClient } from '@/lib/hooks/useChatBackendClient'
+import { useAssistantBackendClient } from '@/lib/hooks/useChatBackendClient'
 import { regenerateCardField } from '@/lib/characters/aiAssist'
 import type { CharacterCardData } from '@/lib/characters/cardSpec'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
@@ -21,7 +21,7 @@ export function RegenerateFieldButton({
   fieldKey: 'description' | 'personality' | 'scenario'
   onResult: (text: string) => void
 }) {
-  const client = useChatBackendClient()
+  const client = useAssistantBackendClient()
   const styleGuidance = useSettingsStore((s) => s.styleGuidance)
   const [open, setOpen] = useState(false)
   const [hint, setHint] = useState('')

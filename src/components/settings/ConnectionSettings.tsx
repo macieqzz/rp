@@ -28,6 +28,8 @@ export function ConnectionSettings() {
   const chatBackendApiKey = useSettingsStore((s) => s.chatBackendApiKey)
   const chatBackendModel = useSettingsStore((s) => s.chatBackendModel)
   const setChatBackendConfig = useSettingsStore((s) => s.setChatBackendConfig)
+  const assistantModel = useSettingsStore((s) => s.assistantModel)
+  const setAssistantModel = useSettingsStore((s) => s.setAssistantModel)
   const [draft, setDraft] = useState(baseUrl)
   const { status, model, version, maxContext, detectedTemplateId } = useConnectionStatus(baseUrl)
   // Checked once per distinct config plus on manual demand (`recheck`), not on a timer like the
@@ -158,6 +160,30 @@ export function ConnectionSettings() {
               >
                 Back to the model list
               </button>
+            )}
+            {useModelList && !isOpenMayhem(chatBackendBaseUrl) ? (
+              <SelectField
+                label="Assistant & character creation model"
+                value={assistantModel}
+                onChange={(e) => setAssistantModel(e.target.value)}
+                hint="Used by the Assistant and by AI-generated characters, fields and lorebook entries. Same base URL and key as above; roleplay and background scoring keep the chat model."
+              >
+                <option value="">Same as chat model</option>
+                {assistantModel && !openAiModels.includes(assistantModel) && <option value={assistantModel}>{assistantModel}</option>}
+                {openAiModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </SelectField>
+            ) : (
+              <TextField
+                label="Assistant & character creation model"
+                value={assistantModel}
+                onChange={(e) => setAssistantModel(e.target.value)}
+                placeholder="Empty = same as chat model"
+                hint="Used by the Assistant and by AI-generated characters, fields and lorebook entries. Same base URL and key as above; roleplay and background scoring keep the chat model."
+              />
             )}
             <HostedConnectionStatus status={hostedStatus.status} detail={hostedStatus.detail} recheck={() => { reloadModels(); hostedStatus.recheck() }} />
             <p className="mt-2 text-xs text-text-muted">
