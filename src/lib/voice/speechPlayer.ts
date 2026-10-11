@@ -7,25 +7,10 @@ import type { Character } from '@/lib/characters/cardSpec'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 import { errorMessage, toastError } from '@/lib/store/useToastStore'
 import { toSpeakableText } from './speakableText'
-import { synthesizeSpeech, type TtsConfig } from './ttsProviders'
+import { synthesizeSpeech } from './ttsProviders'
+import { ttsConfigFor } from './ttsConfig'
 
 export type SpeechStatus = 'idle' | 'loading' | 'playing'
-
-/** The configured TTS setup, with a character's own voice override (if any) applied on top. */
-export function ttsConfigFor(voice?: Character['voice']): TtsConfig {
-  const s = useSettingsStore.getState()
-  if (voice?.provider && voice.provider !== s.ttsProvider) {
-    throw new Error('This character overrides the voice provider. Select that provider in Settings → Voice first, or use the global default for this character.')
-  }
-  return {
-    provider: voice?.provider ?? s.ttsProvider,
-    apiKey: s.ttsProvider === 'openmayhem' ? s.openMayhemApiKey : s.ttsApiKey,
-    model: s.ttsModel,
-    baseUrl: s.ttsBaseUrl,
-    region: s.ttsRegion,
-    voice: voice?.voiceId || s.ttsVoice,
-  }
-}
 
 interface SpeechPlayerState {
   /** Message currently loading or playing, or null. */

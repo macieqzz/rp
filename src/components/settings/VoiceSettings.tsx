@@ -5,7 +5,8 @@ import { OpenMayhemMediaKey } from './OpenMayhemMediaKey'
 import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
-import { listKoboldSpeakers, synthesizeSpeech, TTS_PROVIDER_LABELS, type TtsProviderId } from '@/lib/voice/ttsProviders'
+import { CHAT_AUDIO_DEFAULT_MODEL, CHAT_AUDIO_DEFAULT_VOICE, CHAT_AUDIO_VOICES, listKoboldSpeakers, synthesizeSpeech, TTS_PROVIDER_LABELS, type TtsProviderId } from '@/lib/voice/ttsProviders'
+import { ttsConfigFor } from '@/lib/voice/ttsConfig'
 import { TextField } from '@/components/ui/Field'
 import { Button } from '@/components/ui/Button'
 import { Section } from '@/components/ui/Section'
@@ -60,7 +61,7 @@ export function VoiceSettings() {
     setTestError('')
     try {
       const blob = await synthesizeSpeech(
-        { provider: ttsProvider, apiKey: ttsProvider === 'openmayhem' ? openMayhemApiKey : ttsApiKey, model: ttsModel, baseUrl: ttsBaseUrl, region: ttsRegion, voice: ttsVoice },
+        ttsConfigFor(),
         'Testing, one two three.',
         baseUrl,
         controller.signal,
@@ -169,6 +170,39 @@ export function VoiceSettings() {
                 onChange={(e) => setVoiceConfig({ ttsVoice: e.target.value })}
                 placeholder="e.g. alloy, or a Kokoro voice id"
               />
+            </>
+          )}
+
+          {ttsProvider === 'chat-audio' && (
+            <>
+              <p className="mb-2 text-xs text-text-muted">
+                Uses the base URL and key from Settings → Connection, so it bills to the same account as
+                your replies. Needs an audio-output model; the Nous Portal and OpenRouter carry OpenAI's
+                gpt-audio family. The model reads each line in the language it's written in.
+              </p>
+              <TextField
+                label="Model"
+                value={ttsModel}
+                onChange={(e) => setVoiceConfig({ ttsModel: e.target.value })}
+                placeholder={`${CHAT_AUDIO_DEFAULT_MODEL} (cheapest) or openai/gpt-audio`}
+                list="chat-audio-models"
+              />
+              <datalist id="chat-audio-models">
+                <option value="openai/gpt-audio-mini" />
+                <option value="openai/gpt-audio" />
+              </datalist>
+              <TextField
+                label="Voice"
+                value={ttsVoice}
+                onChange={(e) => setVoiceConfig({ ttsVoice: e.target.value })}
+                placeholder={`e.g. ${CHAT_AUDIO_DEFAULT_VOICE}`}
+                list="chat-audio-voices"
+              />
+              <datalist id="chat-audio-voices">
+                {CHAT_AUDIO_VOICES.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
             </>
           )}
 

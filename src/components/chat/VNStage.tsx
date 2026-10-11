@@ -55,6 +55,7 @@ import { LiveRapport } from './LiveRapport'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 import { errorMessage, toastError, toastSuccess } from '@/lib/store/useToastStore'
 import { synthesizeSpeech } from '@/lib/voice/ttsProviders'
+import { ttsConfigFor } from '@/lib/voice/ttsConfig'
 import { toSpeakableText } from '@/lib/voice/speakableText'
 import { parseSfxWordList } from '@/lib/text/messageSegments'
 import { sfxConfigFor } from '@/lib/text/sfx'
@@ -555,22 +556,7 @@ export function VNStage({
     const controller = new AbortController()
     speakControllerRef.current = controller
     try {
-      if (character?.voice?.provider && character.voice.provider !== ttsProvider) {
-        throw new Error('This character overrides the voice provider. Select that provider in Settings → Voice first, or use the global default for this character.')
-      }
-      const blob = await synthesizeSpeech(
-        {
-          provider: character?.voice?.provider ?? ttsProvider,
-          apiKey: ttsProvider === 'openmayhem' ? openMayhemApiKey : ttsApiKey,
-          model: ttsModel,
-          baseUrl: ttsBaseUrl,
-          region: ttsRegion,
-          voice: character?.voice?.voiceId || ttsVoice,
-        },
-        text,
-        koboldBaseUrl,
-        controller.signal,
-      )
+      const blob = await synthesizeSpeech(ttsConfigFor(character?.voice), text, koboldBaseUrl, controller.signal)
       controller.signal.throwIfAborted()
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)

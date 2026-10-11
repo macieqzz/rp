@@ -11,6 +11,20 @@ function jsonResponse(status: number, body: unknown): Response {
 
 afterEach(() => vi.unstubAllGlobals())
 
+function sseResponse(lines: string[]): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const enc = new TextEncoder()
+      // Split mid-line on purpose so the reader has to stitch events back together.
+      const text = lines.map((l) => `${l}\n\n`).join('')
+      controller.enqueue(enc.encode(text.slice(0, 25)))
+      controller.enqueue(enc.encode(text.slice(25)))
+      controller.close()
+    },
+  })
+  return { ok: true, status: 200, body } as unknown as Response
+}
+
 describe('synthesizeSpeech', () => {
   it('throws without calling fetch when the text is empty or whitespace-only', async () => {
     const fetchMock = vi.fn()
@@ -122,7 +136,7 @@ describe('synthesizeSpeech', () => {
 
   it('every provider has a label, including the unimplemented one', () => {
     expect(Object.keys(TTS_PROVIDER_LABELS).sort()).toEqual(
-      ['alibaba', 'azure', 'elevenlabs', 'koboldcpp', 'openai-compatible', 'openmayhem'].sort(),
+      ['alibaba', 'azure', 'chat-audio', 'elevenlabs', 'koboldcpp', 'openai-compatible', 'openmayhem'].sort(),
     )
   })
 
@@ -164,5 +178,42 @@ describe('listKoboldSpeakers', () => {
       vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => Promise.reject(new Error('bad json')) } as unknown as Response),
     )
     expect(await listKoboldSpeakers('http://localhost:5001')).toEqual([])
+  })
+
+  it('chat-audio streams gpt-audio PCM through the chat connection and wraps it as WAV', async () => {
+    const pcmA = btoa(String.fromCharCode(1, 2, 3, 4))
+    const pcmB = btoa(String.fromCharCode(5, 6))
+    const fetchMock = vi.fn().mockResolvedValue(
+      sseResponse([
+        `data: ${JSON.stringify({ choices: [{ delta: { audio: { data: pcmA, transcript: 'Cześć' } } }] })}`,
+        ': OPENROUTER PROCESSING',
+        `data: ${JSON.stringify({ choices: [{ delta: { audio: { data: pcmB } } }] })}`,
+        'data: [DONE]',
+      ]),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const blob = await synthesizeSpeech(
+      { provider: 'chat-audio', baseUrl: 'https://inference-api.nousresearch.com/v1/', apiKey: 'k', voice: '', model: '' },
+      'Cześć',
+      'http://localhost:5001',
+    )
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://inference-api.nousresearch.com/v1/chat/completions')
+    expect(init.headers.Authorization).toBe('Bearer k')
+    const body = JSON.parse(init.body)
+    expect(body).toMatchObject({ model: 'openai/gpt-audio-mini', stream: true, modalities: ['text', 'audio'], audio: { voice: 'coral', format: 'pcm16' } })
+    expect(body.messages.at(-1)).toEqual({ role: 'user', content: 'Cześć' })
+    expect(blob.type).toBe('audio/wav')
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    expect(new TextDecoder().decode(bytes.slice(0, 4))).toBe('RIFF')
+    expect(bytes.length).toBe(44 + 6)
+    expect([...bytes.slice(44)]).toEqual([1, 2, 3, 4, 5, 6])
+  })
+
+  it('chat-audio says so when the model sent no audio at all', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([`data: ${JSON.stringify({ choices: [{ delta: { content: 'hi' } }] })}`, 'data: [DONE]'])))
+    await expect(
+      synthesizeSpeech({ provider: 'chat-audio', baseUrl: 'https://x.example/v1', apiKey: 'k', voice: 'coral' }, 'Hi', ''),
+    ).rejects.toThrow(/without any audio/)
   })
 })
