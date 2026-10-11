@@ -3,6 +3,7 @@ import {
   CircleUserRound,
   GalleryHorizontalEnd,
   Globe,
+  Library as LibraryIcon,
   MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -14,12 +15,12 @@ import {
 } from 'lucide-react'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 
-export type ViewId = 'chat' | 'assistant' | 'characters' | 'worlds' | 'personas' | 'worldinfo' | 'gallery' | 'settings'
+export type ViewId = 'chat' | 'assistant' | 'characters' | 'library' | 'worlds' | 'personas' | 'worldinfo' | 'gallery' | 'settings'
 
 export const NAV: { id: ViewId; label: string; icon: LucideIcon }[] = [
   { id: 'chat', label: 'Chat', icon: MessageCircle },
   { id: 'assistant', label: 'Assistant', icon: Sparkles },
-  { id: 'characters', label: 'Characters', icon: Users },
+  { id: 'library', label: 'Library', icon: LibraryIcon },
   { id: 'worlds', label: 'Worlds', icon: Globe },
   { id: 'personas', label: 'Personas', icon: CircleUserRound },
   { id: 'worldinfo', label: 'World Info', icon: BookOpen },

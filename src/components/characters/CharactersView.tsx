@@ -18,6 +18,11 @@ export function CharactersView({
 
   useEffect(() => {
     if (!initialCharacterId) return
+    if (initialCharacterId === 'new') {
+      setSelected('new')
+      onConsumedInitial?.()
+      return
+    }
     const match = characters.find((c) => c.id === initialCharacterId)
     if (!match) return
     setSelected(match)

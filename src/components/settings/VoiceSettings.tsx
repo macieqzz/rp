@@ -7,13 +7,16 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 import { CHAT_AUDIO_DEFAULT_MODEL, CHAT_AUDIO_DEFAULT_VOICE, CHAT_AUDIO_VOICES, listKoboldSpeakers, synthesizeSpeech, TTS_PROVIDER_LABELS, type TtsProviderId } from '@/lib/voice/ttsProviders'
 import { ttsConfigFor } from '@/lib/voice/ttsConfig'
-import { TextField } from '@/components/ui/Field'
+import { TTS_READ_MODE_LABELS, type TtsReadMode } from '@/lib/voice/speakableText'
+import { SelectField, TextField } from '@/components/ui/Field'
+import { Toggle } from '@/components/ui/Toggle'
 import { Button } from '@/components/ui/Button'
 import { Section } from '@/components/ui/Section'
 import { SettingsPage } from '@/components/ui/SettingsPage'
 import { errorMessage, toastError } from '@/lib/store/useToastStore'
 
 const PROVIDERS = Object.keys(TTS_PROVIDER_LABELS) as TtsProviderId[]
+const READ_MODES = Object.keys(TTS_READ_MODE_LABELS) as TtsReadMode[]
 
 export function VoiceSettings() {
   const baseUrl = useSettingsStore((s) => s.baseUrl)
@@ -26,6 +29,10 @@ export function VoiceSettings() {
   const openMayhemApiKey = useSettingsStore((s) => s.openMayhemApiKey)
   const { models, loading, reload } = useOpenMayhemModels('AUDIO_SPEECH', ttsProvider === 'openmayhem')
   const setVoiceConfig = useSettingsStore((s) => s.setVoiceConfig)
+  const ttsAutoRead = useSettingsStore((s) => s.ttsAutoRead)
+  const setTtsAutoRead = useSettingsStore((s) => s.setTtsAutoRead)
+  const ttsReadMode = useSettingsStore((s) => s.ttsReadMode)
+  const setTtsReadMode = useSettingsStore((s) => s.setTtsReadMode)
   const [speakers, setSpeakers] = useState<string[]>([])
   const [loadingSpeakers, setLoadingSpeakers] = useState(false)
   const [testState, setTestState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
@@ -94,7 +101,7 @@ export function VoiceSettings() {
     <SettingsPage>
       <Section
         title="Voice (text-to-speech)"
-        description="Read a character's lines aloud from Visual Novel mode. Keys are stored in this browser. OpenMayhem uses RP Suite's local relay; other providers are contacted directly."
+        description="Read a character's lines aloud, from Visual Novel mode's speaker button or automatically for each new reply. Keys are stored in this browser. OpenMayhem uses RP Suite's local relay; other providers are contacted directly."
       >
           <label className="mb-3 block">
             <span className="mb-1 block text-xs font-medium text-text-muted">Provider</span>
@@ -274,6 +281,30 @@ export function VoiceSettings() {
               account, so this was left honest rather than guessed at. The other four providers work now.
             </p>
           )}
+      </Section>
+
+      <Section
+        title="Reading replies aloud"
+        description="Applies to auto-read and to Visual Novel mode's read-aloud button. With reply translation on, the translated text is what gets read, once it's ready."
+      >
+        <Toggle
+          checked={ttsAutoRead}
+          onChange={setTtsAutoRead}
+          label="Auto-read replies"
+          description="Speak each new reply as soon as it's finished, in chat and Visual Novel mode alike."
+        />
+        <SelectField
+          label="Read aloud"
+          value={ttsReadMode}
+          onChange={(e) => setTtsReadMode(e.target.value as TtsReadMode)}
+          hint="With a bracket or quote option, a reply that has none is not read at all. *Actions* are always skipped."
+        >
+          {READ_MODES.map((m) => (
+            <option key={m} value={m}>
+              {TTS_READ_MODE_LABELS[m]}
+            </option>
+          ))}
+        </SelectField>
       </Section>
 
     </SettingsPage>

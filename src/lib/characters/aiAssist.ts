@@ -7,6 +7,8 @@ import { WEATHER_KINDS, type WeatherKind } from '@/lib/world/calendar'
 import { slugifyOutfitId, type Outfit } from '@/lib/vn/outfits'
 import { findSlop } from '@/lib/text/slop'
 import { newId } from '@/lib/id'
+import { PROSE_STYLE_CORE, writerStyleNote } from './proseStyle'
+import { buildRefinePrompt, buildTagPrompt, cleanModelOutput, parseTagSuggestions, refineMaxLength, type RefinePromptOptions } from './aiStudio'
 
 /** Shared sampler settings for the JSON-drafting assist calls — steady, low-surprise decoding so the
  *  output actually parses. `regenerateCardField` keeps its own slightly hotter values on purpose
@@ -62,20 +64,6 @@ function contextSummary(subject: AiLoreSubject, omitField?: string): string {
     lines.push(`Scenario: ${subject.scenario.trim()}`)
   if (subject.extra?.trim()) lines.push(subject.extra.trim())
   return lines.join('\n')
-}
-
-/**
- * The user's global "Writing style" setting (Settings → Generation → Writing style) folded into an
- * authoring prompt, so a generated or rewritten card matches the prose they've asked for in every
- * chat. Placed right after the built-in style block and told to win on any conflict — the same
- * "closest to generation wins" placement `buildPrompt` gives it in the live chat prompt. `''` when
- * unset, so it costs nothing for the common case.
- */
-function writerStyleNote(styleGuidance: string | undefined): string {
-  const s = styleGuidance?.trim()
-  return s
-    ? `The writer keeps these style notes for everything they make in this app. Follow them, and where they conflict with the guidance above, they take priority:\n${s}`
-    : ''
 }
 
 // Every `client.generate` call in this file goes through `generateWithTimeout` rather than a bare
@@ -168,10 +156,6 @@ const CARD_FIELD_SPEC = `Output ONLY a single JSON object. No markdown fences, n
 - "mes_example": string, NOT an array. Two or three sample exchanges. Begin each one with <START> on its own line, then a "{{user}}:" line, then a "{{char}}:" line in the character's voice using the same *asterisks* / "quotes" convention. Separate every line with \\n.
 - "creator_notes": string, for whoever edits this card next. May be "".
 - "tags": array of short lowercase strings.`
-
-/** The core anti-slop guidance, verbatim house style from `systemPrompts.ts`. Reused by the
- *  whole-card prompts and by the single-field `regenerateCardField` rewrite. */
-const PROSE_STYLE_CORE = `Write like a person, not like an AI. Plain, specific language with a real point of view. No em dashes. Drop the habits of machine-written roleplay: hedging, naming a feeling instead of showing it, "a mix of X and Y", "not just X but Y", tidy lists of three, "voice barely above a whisper", "a shiver down her spine", any sentence that tells the reader how to feel.`
 
 /** Whole-card version: the core plus the cross-field consistency point, aimed at the two fields
  *  that are actual fiction (`first_mes`, `mes_example`) rather than metadata. */
@@ -633,4 +617,64 @@ export async function suggestLoreEntries(
       content: typeof e.content === 'string' ? e.content : '',
     }))
     .filter((e) => e.keys.length > 0 && e.content.trim())
+}
+
+/**
+ * One AI Studio round (`AiStudio.tsx`): rewrites a whole field per the writer's instruction, writes
+ * it fresh in brainstorm mode, or — with a `selection` — returns only the replacement for that span
+ * (the caller splices it back with `spliceSelection`). Same prose sampler as `regenerateCardField`;
+ * the budget scales with the word target / span via `refineMaxLength`.
+ */
+export async function refineCardField(
+  client: ChatBackend,
+  opts: RefinePromptOptions & { signal?: AbortSignal },
+): Promise<string> {
+  const text = await generateWithTimeout(
+    client,
+    {
+      prompt: buildRefinePrompt(opts),
+      max_length: refineMaxLength(opts),
+      max_context_length: await client.getEffectiveMaxContext(),
+      temperature: 0.9,
+      top_p: 0.95,
+      top_k: 0,
+      min_p: 0.05,
+      typical: 1,
+      tfs: 1,
+      rep_pen: 1.12,
+      rep_pen_range: 1024,
+      rep_pen_slope: 0.7,
+      stop_sequence: ['\n\n\n'],
+      trim_stop: true,
+    },
+    'AI Studio',
+    opts.signal,
+  )
+  const cleaned = cleanModelOutput(text)
+  if (!cleaned) throw new Error('The model returned an empty response. Try again or rephrase the instruction.')
+  return cleaned
+}
+
+/** New library tags for a card (lowercase, deduped against `existingTags`, at most 12). */
+export async function suggestCardTags(
+  client: ChatBackend,
+  card: CharacterCardData,
+  existingTags: string[],
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const text = await generateWithTimeout(
+    client,
+    {
+      prompt: buildTagPrompt(card, existingTags),
+      max_length: 200,
+      max_context_length: await client.getEffectiveMaxContext(),
+      ...ASSIST_SAMPLER,
+      ...(client.prefersJsonObject ? { jsonOutput: true } : {}),
+      stop_sequence: ['\n\n\n'],
+      trim_stop: true,
+    },
+    'Suggest tags',
+    signal,
+  )
+  return parseTagSuggestions(text, existingTags)
 }

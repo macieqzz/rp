@@ -1,14 +1,17 @@
 import { memo, useState } from 'react'
-import { AlertCircle, ChevronLeft, ChevronRight, Compass, GitFork, Heart, History, Loader2, MessageSquareWarning, RotateCcw, Star, TriangleAlert, Unlink, Volume1, Volume2, X } from 'lucide-react'
+import { AlertCircle, ChevronLeft, ChevronRight, Compass, GitFork, Heart, History, Languages, Loader2, MessageSquareWarning, RotateCcw, Star, TriangleAlert, Unlink, Volume1, Volume2, X } from 'lucide-react'
 import type { StoredMessage } from '@/lib/types'
 import { useSettingsStore, type AvatarShape } from '@/lib/store/useSettingsStore'
+import { useSpeechStore } from '@/lib/store/useSpeechStore'
+import { extractReadAloudText, TTS_READ_MODE_LABELS } from '@/lib/voice/speakableText'
+import { toastInfo } from '@/lib/store/useToastStore'
 import { messageAnchorId } from '@/lib/scrollToMessage'
 import { renderMessageText } from '@/lib/text/messageText'
+import { activeTranslation } from '@/lib/text/translate'
 import type { SfxConfig } from '@/lib/text/messageSegments'
 import { confirmDialog } from '@/lib/store/useConfirmStore'
 import { intentSpec } from '@/lib/dating/intent'
 import type { Character } from '@/lib/characters/cardSpec'
-import { useSpeechPlayer } from '@/lib/voice/speechPlayer'
 
 function avatarClass(shape: AvatarShape): string {
   switch (shape) {
@@ -85,7 +88,7 @@ export const MessageBubble = memo(function MessageBubble({
   const regexScripts = useSettingsStore((s) => s.regexScripts)
 
   // A primitive per bubble, so a line starting or stopping elsewhere doesn't re-render this one.
-  const speechStatus = useSpeechPlayer((s) => (s.messageId === message.id ? s.status : 'idle'))
+  const speechStatus = useSpeechStore((s) => (s.messageId === message.id ? s.state : 'idle'))
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.text)
@@ -95,7 +98,11 @@ export const MessageBubble = memo(function MessageBubble({
   const [steerDraft, setSteerDraft] = useState('')
 
   const isUser = message.role === 'user'
-  const displayText = isStreaming ? streamingText ?? '' : message.text
+  // Display-only translation of the current text, when one exists for it; the original stays in
+  // `message.text` (what the model and every judge read) and one click away.
+  const translation = isUser ? undefined : activeTranslation(message)
+  const [showOriginal, setShowOriginal] = useState(false)
+  const displayText = isStreaming ? streamingText ?? '' : translation && !showOriginal ? translation : message.text
   const swipes = message.swipes ?? []
   const canSwipe = !isUser && swipes.length > 0 && !isStreaming
   // Text stays empty on a failed generation — see `useChatSession.ts` — rather than persisting an
@@ -115,11 +122,16 @@ export const MessageBubble = memo(function MessageBubble({
   // `dating/continuityGuard.ts`. This one has usually already earned an automatic retry; the badge
   // is what's left when the retry was spent or the second attempt broke continuity too.
   const showContinuityFlag = !isUser && !!message.continuityFlag && !isStreaming
-  const canSpeak = !isUser && !isStreaming && !message.failed && !!message.text.trim()
+  const canSpeak = !isUser && !isStreaming && !message.failed && !!displayText.trim()
+  // Reads what's on screen (the translation when one is showing), trimmed to Settings → Voice's
+  // "Read aloud" mode; a second click while this message is playing stops it.
   const toggleSpeech = () => {
-    const player = useSpeechPlayer.getState()
-    if (speechStatus !== 'idle') player.stop()
-    else void player.speak(message.id, message.text, voice)
+    const player = useSpeechStore.getState()
+    if (speechStatus !== 'idle') return player.stop()
+    const readMode = useSettingsStore.getState().ttsReadMode
+    const spoken = extractReadAloudText(displayText, readMode)
+    if (!spoken) return void toastInfo(`Nothing to read aloud in this message. Settings → Voice → Read aloud is set to "${TTS_READ_MODE_LABELS[readMode]}".`)
+    void player.speak(spoken, voice, message.id)
   }
 
   const startEdit = () => {
@@ -260,6 +272,17 @@ export const MessageBubble = memo(function MessageBubble({
             <ChevronRight size={14} strokeWidth={2} />
           </button>
         </span>
+      )}
+      {translation && !isStreaming && (
+        <button
+          onClick={() => setShowOriginal((v) => !v)}
+          className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-bg-sunken ${showOriginal ? 'text-accent' : 'hover:text-text'}`}
+          title={showOriginal ? 'Showing the original. Click to show the translation' : 'Translated. Click to show the original'}
+          aria-label={showOriginal ? 'Show translation' : 'Show original'}
+          aria-pressed={showOriginal}
+        >
+          <Languages size={13} strokeWidth={2} />
+        </button>
       )}
       {!isStreaming && (
         <>

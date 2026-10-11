@@ -9,6 +9,7 @@ import {
   GitFork,
   Heart,
   History,
+  Languages,
   Loader2,
   Play,
   RotateCcw,
@@ -53,10 +54,10 @@ import { MessageLog } from './MessageLog'
 import { SakuraPetals } from './SakuraPetals'
 import { LiveRapport } from './LiveRapport'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
-import { errorMessage, toastError, toastSuccess } from '@/lib/store/useToastStore'
-import { synthesizeSpeech } from '@/lib/voice/ttsProviders'
-import { ttsConfigFor } from '@/lib/voice/ttsConfig'
-import { toSpeakableText } from '@/lib/voice/speakableText'
+import { toastInfo, toastSuccess } from '@/lib/store/useToastStore'
+import { useSpeechStore } from '@/lib/store/useSpeechStore'
+import { extractReadAloudText, TTS_READ_MODE_LABELS } from '@/lib/voice/speakableText'
+import { activeTranslation } from '@/lib/text/translate'
 import { parseSfxWordList } from '@/lib/text/messageSegments'
 import { sfxConfigFor } from '@/lib/text/sfx'
 import { resolveExpressionSprite } from '@/lib/vn/expressions'
@@ -316,6 +317,10 @@ export function VNStage({
   // line as "current" instead of putting an error banner in Sumire's mouth. Same textbox, same
   // nameplate slot, just attributed to whoever actually has something to say right now.
   const showUserAsCurrent = !!lastCharMsg?.failed && !isStreamingThis && !!lastUserMsg
+  // Display-only translation of the line (Settings → Connection → Reply translation); the original
+  // stays one click away and is what the model and every judge read.
+  const lineTranslation = lastCharMsg && !isStreamingThis ? activeTranslation(lastCharMsg) : undefined
+  const [showOriginalLine, setShowOriginalLine] = useState(false)
   // A failed generation keeps empty text (see useChatSession.ts); show a message instead of going blank.
   const displayText = isStreamingThis
     ? streamingText
@@ -323,7 +328,7 @@ export function VNStage({
       ? lastUserMsg!.text
       : lastCharMsg?.failed
         ? '⚠ Generation failed. Try regenerating (⟲) from the log.'
-        : lastCharMsg?.text || (messages.length === 0 ? 'Say hello to begin the scene…' : '')
+        : (lineTranslation && !showOriginalLine ? lineTranslation : lastCharMsg?.text) || (messages.length === 0 ? 'Say hello to begin the scene…' : '')
 
   const activeSwipe = lastCharMsg?.activeSwipe ?? 0
   const scene = lastCharMsg?.swipeScenes?.[activeSwipe] ?? lastCharMsg?.scene
@@ -522,79 +527,30 @@ export function VNStage({
     return () => window.removeEventListener('keydown', onKey)
   }, [inlineInput, isWriting, showLog, hideUI])
 
-  // Per-line voice: "read this line aloud" via the shared TTS stack (`lib/voice`). Manual and
-  // one line at a time only — no auto-voice-on-every-reply, unlike Auto above; that's a
-  // recurring-cost surface this pass intentionally doesn't take on.
-  const koboldBaseUrl = useSettingsStore((s) => s.baseUrl)
-  const ttsProvider = useSettingsStore((s) => s.ttsProvider)
-  const ttsApiKey = useSettingsStore((s) => s.ttsApiKey)
-  const ttsBaseUrl = useSettingsStore((s) => s.ttsBaseUrl)
-  const ttsRegion = useSettingsStore((s) => s.ttsRegion)
-  const ttsModel = useSettingsStore((s) => s.ttsModel)
-  const openMayhemApiKey = useSettingsStore((s) => s.openMayhemApiKey)
-  const ttsVoice = useSettingsStore((s) => s.ttsVoice)
-  const [speakState, setSpeakState] = useState<'idle' | 'loading' | 'playing'>('idle')
-  const speakAudioRef = useRef<HTMLAudioElement | null>(null)
-  const speakControllerRef = useRef<AbortController | null>(null)
-  const speakUrlRef = useRef<string | null>(null)
-  const stopSpeaking = () => {
-    speakControllerRef.current?.abort()
-    speakControllerRef.current = null
-    if (speakUrlRef.current) { URL.revokeObjectURL(speakUrlRef.current); speakUrlRef.current = null }
-    speakAudioRef.current?.pause()
-    speakAudioRef.current = null
-    setSpeakState('idle')
-  }
-  // Always starts fresh (cancelling anything already playing) — shared by the manual button's
-  // "start" half and by auto-voice, which must never be subject to the button's own toggle-to-stop
-  // semantics (a second reply arriving mid-playback should cut in, not silently no-op as a "stop").
-  const startSpeaking = async (rawText: string) => {
-    stopSpeaking()
-    const text = toSpeakableText(rawText)
-    if (!text) return
-    setSpeakState('loading')
-    const controller = new AbortController()
-    speakControllerRef.current = controller
-    try {
-      const blob = await synthesizeSpeech(ttsConfigFor(character?.voice), text, koboldBaseUrl, controller.signal)
-      controller.signal.throwIfAborted()
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      speakUrlRef.current = url
-      speakAudioRef.current = audio
-      setSpeakState('playing')
-      const finish = () => {
-        URL.revokeObjectURL(url)
-        if (speakAudioRef.current === audio) {
-          speakAudioRef.current = null
-          setSpeakState('idle')
-        }
-      }
-      audio.onended = finish
-      audio.onerror = finish
-      try { await audio.play() } catch (error) { finish(); throw error }
-    } catch (e) {
-      if (controller.signal.aborted) {
-        if (!(e instanceof DOMException && e.name === 'AbortError')) toastError(errorMessage(e))
-        return
-      }
-      setSpeakState('idle')
-      toastError(errorMessage(e))
-    }
-  }
+  // Per-line voice: "read this line aloud" via the app's shared read-aloud player, which auto-read
+  // of new replies (Settings → Voice, started from `useChatSession`) also goes through — one voice
+  // at a time, and this button always shows whatever is playing.
+  const speakState = useSpeechStore((s) => s.state)
+  const stopSpeaking = useSpeechStore((s) => s.stop)
+  const ttsReadMode = useSettingsStore((s) => s.ttsReadMode)
+  const ttsAutoRead = useSettingsStore((s) => s.ttsAutoRead)
+  const setTtsAutoRead = useSettingsStore((s) => s.setTtsAutoRead)
   // The manual button: toggles, since a deliberate click while already speaking means "stop."
   const speakLine = () => {
     if (speakState !== 'idle') {
       stopSpeaking()
       return
     }
-    startSpeaking(displayText)
+    const spoken = extractReadAloudText(displayText, ttsReadMode)
+    if (!spoken) {
+      toastInfo(`Nothing to read aloud in this line. Settings → Voice → Read aloud is set to "${TTS_READ_MODE_LABELS[ttsReadMode]}".`)
+      return
+    }
+    void useSpeechStore.getState().speak(spoken, character?.voice)
   }
   // Swiping to a different line, or leaving the message entirely, cuts off whatever was playing —
   // it no longer matches what's on screen.
-  useEffect(() => stopSpeaking, [lastCharMsg?.id, activeSwipe, ttsProvider, ttsModel, ttsVoice, openMayhemApiKey, ttsApiKey, ttsBaseUrl, ttsRegion, character?.voice?.provider, character?.voice?.voiceId])
-  const autoVoice = useSettingsStore((s) => s.ttsAutoVoice)
-  const setTtsAutoVoice = useSettingsStore((s) => s.setTtsAutoVoice)
+  useEffect(() => stopSpeaking, [lastCharMsg?.id, activeSwipe, stopSpeaking])
 
   // Every message id this component instance has watched stream in live — its text already
   // appeared token-by-token, so re-running the typewriter over it (e.g. once `isStreamingThis`
@@ -615,20 +571,6 @@ export function VNStage({
   // The ADV "done typing" glyph — only for an actual, complete character line, never the empty-chat
   // placeholder or a still-in-flight stream.
   const dialogueComplete = !isStreamingThis && !!lastCharMsg?.text && !lastCharMsg?.failed && dialogueRevealDone
-  // Auto-voice: speaks each new reply once it finishes typing, unprompted — opt-in, off by
-  // default, and remembered (shared with the chat view's toggle). Unlike Auto-advance this can't
-  // chain into extra generations on its own: it only ever narrates a reply that already happened,
-  // so it carries none of Auto-advance's runaway-cost risk and needs none of its safety caps.
-  // Seeded with the line already on screen, so opening a chat with it on doesn't read old text;
-  // switching it on by hand clears the seed, so that click reads the current line right away.
-  const autoVoiceSpokenIdRef = useRef<string | null>(lastCharMsg?.id ?? null)
-  useEffect(() => {
-    if (!autoVoice || !dialogueComplete || !lastCharMsg) return
-    if (autoVoiceSpokenIdRef.current === lastCharMsg.id) return
-    autoVoiceSpokenIdRef.current = lastCharMsg.id
-    startSpeaking(lastCharMsg.text)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoVoice, dialogueComplete, lastCharMsg?.id])
   // Keeps the growing edge of the reveal (and, once done, the glyph right after it) in view instead
   // of leaving a long reply scrolled to its own top inside the capped-height box.
   const dialogueBoxRef = useRef<HTMLDivElement>(null)
@@ -731,20 +673,28 @@ export function VNStage({
               )}
             </button>
             <button
-              onClick={() => {
-                if (!autoVoice) autoVoiceSpokenIdRef.current = null
-                setTtsAutoVoice(!autoVoice)
-              }}
-              title={autoVoice ? 'Auto-voice: on. Reads each new reply aloud' : 'Auto-voice: read each new reply aloud automatically'}
-              aria-label={autoVoice ? 'Auto-voice: on' : 'Auto-voice: off'}
-              aria-pressed={autoVoice}
+              onClick={() => setTtsAutoRead(!ttsAutoRead)}
+              title={ttsAutoRead ? 'Auto-read: on. Reads each new reply aloud (Settings → Voice)' : 'Auto-read: read each new reply aloud automatically'}
+              aria-label={ttsAutoRead ? 'Auto-read: on' : 'Auto-read: off'}
+              aria-pressed={ttsAutoRead}
               className={`relative flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold transition-colors hover:bg-white/10 ${
-                autoVoice ? 'text-accent' : 'text-white/70'
+                ttsAutoRead ? 'text-accent' : 'text-white/70'
               }`}
             >
               A
-              {autoVoice && <span className="vn-auto-pulse absolute right-0.5 top-1 h-1.5 w-1.5 rounded-full bg-accent" />}
+              {ttsAutoRead && <span className="vn-auto-pulse absolute right-0.5 top-1 h-1.5 w-1.5 rounded-full bg-accent" />}
             </button>
+            {lineTranslation && (
+              <button
+                onClick={() => setShowOriginalLine((v) => !v)}
+                title={showOriginalLine ? 'Showing the original. Click to show the translation' : 'Translated. Click to show the original'}
+                aria-label={showOriginalLine ? 'Show translation' : 'Show original'}
+                aria-pressed={showOriginalLine}
+                className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-white/10 ${showOriginalLine ? 'text-accent' : 'text-white/70'}`}
+              >
+                <Languages size={14} strokeWidth={2} />
+              </button>
+            )}
             <button
               onClick={() => onTogglePin(lastCharMsg!.id)}
               title={lastCharMsg.pinned ? 'Unpin' : 'Pin this moment'}

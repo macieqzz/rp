@@ -8,6 +8,7 @@ import { GlobalBgm } from '@/components/chat/GlobalBgm'
 import { WelcomeView } from '@/components/chat/WelcomeView'
 import { AssistantView } from '@/components/assistant/AssistantView'
 import { CharactersView } from '@/components/characters/CharactersView'
+import { LibraryView } from '@/components/library/LibraryView'
 import { WorldsView } from '@/components/worlds/WorldsView'
 import { PersonasView } from '@/components/personas/PersonasView'
 import { WorldInfoView } from '@/components/worldinfo/WorldInfoView'
@@ -16,7 +17,8 @@ import { SettingsView } from '@/components/settings/SettingsView'
 import { ToastViewport } from '@/components/ui/ToastViewport'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
-import { chatsApi } from '@/lib/api/client'
+import { chatsApi, charactersApi, worldsApi } from '@/lib/api/client'
+import { createChat } from '@/lib/chat/createChat'
 import { useApplyTheme } from '@/lib/hooks/useApplyTheme'
 import { useOutreachTick } from '@/lib/hooks/useOutreachTick'
 import { useAutoContextLength } from '@/lib/hooks/useAutoContextLength'
@@ -134,6 +136,45 @@ export default function App() {
         {view === 'assistant' && <AssistantView />}
         {view === 'characters' && (
           <CharactersView initialCharacterId={pendingCharacterId} onConsumedInitial={() => setPendingCharacterId(null)} />
+        )}
+        {view === 'library' && (
+          <LibraryView
+            onOpenChat={(chatId) => {
+              setActiveChatId(chatId)
+              setView('chat')
+            }}
+            onOpenChatForCharacter={async (characterId) => {
+              try {
+                const allChats = await chatsApi.list()
+                const existing = allChats.find((c) => c.characterId === characterId)
+                if (existing) {
+                  setActiveChatId(existing.id)
+                  setView('chat')
+                } else {
+                  const char = await charactersApi.get(characterId)
+                  if (char) {
+                    const world = char.worldId ? await worldsApi.get(char.worldId) : undefined
+                    const chat = await createChat({ character: char, world: world || undefined, personaId: useSettingsStore.getState().activePersonaId || '' })
+                    setActiveChatId(chat.id)
+                    setView('chat')
+                  }
+                }
+              } catch (e) {
+                console.error(e)
+              }
+            }}
+            onEditCharacter={(characterId) => {
+              setPendingCharacterId(characterId)
+              setView('characters')
+            }}
+            onCreateCharacter={() => {
+              setPendingCharacterId('new')
+              setView('characters')
+            }}
+            onOpenWorldInfo={() => {
+              setView('worldinfo')
+            }}
+          />
         )}
         {view === 'worlds' && (
           <WorldsView

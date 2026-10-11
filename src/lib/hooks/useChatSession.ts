@@ -222,6 +222,9 @@ import { buildFactsLorebook } from '@/lib/worldinfo/facts'
 import { pickFactsToRetire, planFactWrite } from '@/lib/worldinfo/factMemory'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 import { errorMessage, toastError, toastInfo, toastSuccess } from '@/lib/store/useToastStore'
+import { useSpeechStore } from '@/lib/store/useSpeechStore'
+import { translateReply } from '@/lib/text/translate'
+import { extractReadAloudText } from '@/lib/voice/speakableText'
 import { playSendBlip } from '@/lib/audio/sfx'
 import type { Character, Lorebook } from '@/lib/characters/cardSpec'
 import { buildCharacterProfileNote } from '@/lib/characters/profile'
@@ -432,6 +435,10 @@ export function useChatSession(chatId: string | null) {
   const globalSystemPrompt = useSettingsStore((s) => s.systemPrompt)
   const globalPostHistory = useSettingsStore((s) => s.postHistoryInstructions)
   const promptSections = useSettingsStore((s) => s.promptSections)
+  const translateReplies = useSettingsStore((s) => s.translateReplies)
+  const translationLanguage = useSettingsStore((s) => s.translationLanguage)
+  const ttsAutoRead = useSettingsStore((s) => s.ttsAutoRead)
+  const ttsReadMode = useSettingsStore((s) => s.ttsReadMode)
   const setActiveChatId = useSettingsStore((s) => s.setActiveChatId)
   const client = useChatBackendClient()
   const customInstructTemplates = useApiQuery('instruct-templates', () => instructTemplatesApi.list(), []) ?? []
@@ -530,6 +537,8 @@ export function useChatSession(chatId: string | null) {
   useEffect(() => {
     setAssistTasks({})
   }, [chatId])
+  // Whatever is being read aloud belongs to the chat it came from.
+  useEffect(() => () => useSpeechStore.getState().stop(), [chatId])
   const runAssist = useCallback((key: string, label: string, fn: () => Promise<unknown>) => {
     setAssistTasks((t) => ({ ...t, [key]: label }))
     void Promise.resolve()
@@ -544,7 +553,7 @@ export function useChatSession(chatId: string | null) {
       )
   }, [])
   // Fixed order so the strip doesn't reshuffle as tasks finish at different times.
-  const assistActivity = ['relationship', 'rapport', 'choices', 'tasks', 'summary', 'vision']
+  const assistActivity = ['translate', 'relationship', 'rapport', 'choices', 'tasks', 'summary', 'vision']
     .map((k) => assistTasks[k])
     .filter((label): label is string => !!label)
 
@@ -2898,6 +2907,40 @@ export function useChatSession(chatId: string | null) {
           return
         }
 
+        // Display-only translation (Settings → Connection → Reply translation). Awaited while the
+        // reply still counts as generating, so the bubble/VN box switch to it in one step and
+        // auto-read below speaks it. `text` keeps the original: prompts, scoring, flags and
+        // scene/expression parsing never see the translation. Failure keeps the original.
+        const landed = !abort.signal.aborted ? await messagesApi.get(targetMessageId) : undefined
+        const replyLanded = !!landed && !landed.failed && landed.text === combined && !!combined.trim()
+        let replyForReading = combined
+        const language = translationLanguage.trim()
+        if (translateReplies && language && replyLanded) {
+          setAssistTasks((t) => ({ ...t, translate: `Translating to ${language}` }))
+          try {
+            const translated = await translateReply(combined, {
+              language,
+              signal: abort.signal,
+            })
+            const freshMsg = await messagesApi.get(targetMessageId)
+            const swipeTranslations = freshMsg?.swipeTranslations ? [...freshMsg.swipeTranslations] : []
+            swipeTranslations[freshMsg?.activeSwipe ?? 0] = { source: combined, text: translated, language }
+            await messagesApi.update(targetMessageId, { swipeTranslations })
+            replyForReading = translated
+          } catch (e) {
+            if (!abort.signal.aborted) toastError(`Couldn't translate this reply: ${errorMessage(e)}`)
+          } finally {
+            setAssistTasks((t) => {
+              const { translate: _drop, ...rest } = t
+              return rest
+            })
+          }
+        }
+        if (ttsAutoRead && replyLanded && !abort.signal.aborted) {
+          const spoken = extractReadAloudText(replyForReading, ttsReadMode)
+          if (spoken) void useSpeechStore.getState().speak(spoken, speaker.voice)
+        }
+
         // Post-reply assists — each fire-and-forget, routed through `runAssist` so the UI can show which are still running.
         const relationshipHistory = wasOriginallyContinuing
           ? [...historyForPrompt.slice(0, -1), { id: targetMessageId, role: 'char' as const, name: speaker.card.name, text: combined }]
@@ -3010,6 +3053,10 @@ export function useChatSession(chatId: string | null) {
       sampler,
       suggestChoicesForMessage,
       template,
+      translateReplies,
+      translationLanguage,
+      ttsAutoRead,
+      ttsReadMode,
       updateAffectionFromReply,
       updateMemorySummary,
       visionSceneDetection,

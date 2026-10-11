@@ -137,7 +137,9 @@ Output gets cleaned on the way in: AI prose tells are named back to the model to
 
 ### Voice and proactive characters
 
-Give a character a weekly schedule and they'll message you first when they'd plausibly be free. Companion mode is hands-free: you talk, it transcribes, the character answers, and it's read back aloud. Text-to-speech runs through KoboldCpp, any OpenAI-compatible server, ElevenLabs, Azure or Alibaba.
+Give a character a weekly schedule and they'll message you first when they'd plausibly be free. Companion mode is hands-free: you talk, it transcribes, the character answers, and it's read back aloud. Text-to-speech runs through KoboldCpp, any OpenAI-compatible server, ElevenLabs, Azure or Alibaba. **Settings > Voice** can auto-read every new reply, and can limit reading to text in (brackets) or "quotes".
+
+**Settings > Connection > Reply translation** translates each finished reply (e.g. into Polish) with the same model and shows the translation, with the original one click away. Later prompts, scoring and expression tags keep using the original.
 
 ### Image generation
 
