@@ -46,6 +46,9 @@ export interface FullCharacterSeed {
   portraitBase64?: string
   /** A selected world's description — every stage folds this in so the character fits it. */
   worldTone?: string
+  /** A card read from a file, used as-is instead of drafting one; only the optional stages run. Its
+   *  own lorebook, if it has entries, is kept and the `lore` stage skipped. */
+  card?: CharacterCardData
   /** The user's global "Writing style" setting — folded into every prose-bearing stage so the
    *  generated card matches the style they've asked for in chat. */
   styleGuidance?: string
@@ -105,8 +108,8 @@ export async function draftFullCharacter(
   const brief = seed.brief?.trim()
   const worldTone = seed.worldTone?.trim() || undefined
   const styleGuidance = seed.styleGuidance?.trim() || undefined
-  if (!brief && !seed.portraitBase64) {
-    throw new Error('Give a brief or a reference portrait to generate a character from.')
+  if (!brief && !seed.portraitBase64 && !seed.card) {
+    throw new Error('Give a brief, a reference portrait or a card to generate a character from.')
   }
   const throwIfAborted = () => {
     if (signal?.aborted) throw abortError()
@@ -120,7 +123,12 @@ export async function draftFullCharacter(
   onStage?.('card', 'start')
   let card: CharacterCardData
   let cardRawOutput: string
-  try {
+  if (seed.card) {
+    card = seed.card
+    cardRawOutput = ''
+    completed.push('card')
+    onStage?.('card', 'done')
+  } else try {
     const result = seed.portraitBase64
       ? await draftCharacterFromPortrait(client, seed.portraitBase64, { brief, worldTone, styleGuidance, signal })
       : await draftCharacterFromBrief(client, brief ?? '', { worldTone, styleGuidance, signal })
@@ -175,6 +183,8 @@ export async function draftFullCharacter(
     if (drafted.length === 0) throw new Error('The model did not propose any usable outfits.')
     outfits = drafted
   })
+
+  if (seed.card?.character_book?.entries?.length) return { card, cardRawOutput, profile, bonds, outfits, characterBook, completed, failed }
 
   await runStage('lore', async () => {
     const entries = await suggestLoreEntries(client, subject, [], loreCount, signal)

@@ -18,7 +18,8 @@ import {
   type FullCharacterStage,
   type StageStatus,
 } from '@/lib/characters/generateFullCharacter'
-import { fileToDataUrl } from '@/lib/characters/importExport'
+import { fileToDataUrl, importCharacterFile } from '@/lib/characters/importExport'
+import { POLISH_STYLE_NOTE, translateCardToPolish } from '@/lib/characters/polishCard'
 import {
   TRAIT_AXIS_META,
   composeTraitBrief,
@@ -45,6 +46,8 @@ export interface GeneratedCharacter {
   bonds?: DraftedBonds | null
   outfits?: Outfit[] | null
   characterBook?: Lorebook | null
+  /** The portrait embedded in a card read with "From a card", if it had one. */
+  avatarDataUrl?: string
 }
 
 type StageState = Record<FullCharacterStage, StageStatus | 'pending'>
@@ -70,7 +73,11 @@ export function GenerateCharacterDialog({
 }) {
   const client = useAssistantBackendClient()
   const styleGuidance = useSettingsStore((s) => s.styleGuidance)
-  const [mode, setMode] = useState<'brief' | 'portrait' | 'traits'>('brief')
+  const [mode, setMode] = useState<'brief' | 'portrait' | 'traits' | 'card'>('brief')
+  /** "Przetłumacz [PL]": a card read from a file is translated and moved into Polish life; any other draft is written in Polish from the start. */
+  const [polish, setPolish] = useState(false)
+  const [sourceCard, setSourceCard] = useState<{ card: CharacterCardData; avatarDataUrl?: string; fileName: string } | null>(null)
+  const [cardProgress, setCardProgress] = useState('')
   const [scope, setScope] = useState<'full' | 'card'>('full')
   const [brief, setBrief] = useState('')
   const [traitPool, setTraitPool] = useState<TraitOptionPool | null>(null)
@@ -145,25 +152,43 @@ export function GenerateCharacterDialog({
   }
 
   const generate = async () => {
-    if (mode !== 'portrait' && !brief.trim()) return
-    if (mode === 'portrait' && !portraitFile) return
+    if (mode === 'card' ? !sourceCard : mode === 'portrait' ? !portraitFile : !brief.trim()) return
     setBusy(true)
     setFailed(false)
     setRawOutput('')
     setStages(scope === 'full' ? (Object.fromEntries(ALL_STAGES.map((s) => [s, 'pending'])) as StageState) : null)
     const controller = new AbortController()
     abortRef.current = controller
+    const style = polish ? [styleGuidance.trim(), POLISH_STYLE_NOTE].filter(Boolean).join('\n') : styleGuidance
     try {
+      if (mode === 'card' && sourceCard) {
+        const card = polish
+          ? await translateCardToPolish(client, sourceCard.card, { signal: controller.signal, onProgress: (label) => setCardProgress(`Translating: ${label}…`) })
+          : sourceCard.card
+        setCardProgress('')
+        if (scope === 'card') {
+          setStages(null)
+          onGenerated({ card, avatarDataUrl: sourceCard.avatarDataUrl })
+          return
+        }
+        const draft = await draftFullCharacter(
+          client,
+          { card, worldTone, styleGuidance: style },
+          { signal: controller.signal, onStage: (stage, status) => setStages((prev) => (prev ? { ...prev, [stage]: status } : prev)) },
+        )
+        onGenerated({ card: draft.card, profile: draft.profile, bonds: draft.bonds, outfits: draft.outfits, characterBook: draft.characterBook, avatarDataUrl: sourceCard.avatarDataUrl })
+        return
+      }
       if (scope === 'card') {
         const result =
           mode === 'portrait'
             ? await draftCharacterFromPortrait(client, await portraitBase64(), {
                 brief: brief.trim() || undefined,
                 worldTone,
-                styleGuidance,
+                styleGuidance: style,
                 signal: controller.signal,
               })
-            : await draftCharacterFromBrief(client, brief.trim(), { worldTone, styleGuidance, signal: controller.signal })
+            : await draftCharacterFromBrief(client, brief.trim(), { worldTone, styleGuidance: style, signal: controller.signal })
         setRawOutput(result.rawOutput)
         if (!result.card.name.trim()) result.card.name = brief.trim().slice(0, 40) || 'New Character'
         onGenerated({ card: result.card })
@@ -176,7 +201,7 @@ export function GenerateCharacterDialog({
           brief: brief.trim() || undefined,
           portraitBase64: mode === 'portrait' ? await portraitBase64() : undefined,
           worldTone,
-          styleGuidance,
+          styleGuidance: style,
         },
         {
           signal: controller.signal,
@@ -199,6 +224,7 @@ export function GenerateCharacterDialog({
         characterBook: draft.characterBook,
       })
     } catch (e) {
+      setCardProgress('')
       if (isAbortError(e) || controller.signal.aborted) return
       setFailed(true)
       const hint =
@@ -214,12 +240,22 @@ export function GenerateCharacterDialog({
 
   const stop = () => abortRef.current?.abort()
 
-  const switchMode = (next: 'brief' | 'portrait' | 'traits') => {
+  const pickCard = async (file: File) => {
+    try {
+      const imported = await importCharacterFile(file)
+      setSourceCard({ card: imported.card, avatarDataUrl: imported.avatarDataUrl, fileName: file.name })
+    } catch (e) {
+      toastError(`Could not read that card: ${errorMessage(e)}`)
+    }
+  }
+
+  const switchMode = (next: 'brief' | 'portrait' | 'traits' | 'card') => {
     setMode(next)
     if (next === 'traits' && !traitPool && !traitPoolLoading) loadTraitPool()
   }
 
-  const canGenerate = mode === 'portrait' ? !!portraitFile : mode === 'traits' ? !!brief.trim() && !traitPoolLoading : !!brief.trim()
+  const canGenerate =
+    mode === 'card' ? !!sourceCard : mode === 'portrait' ? !!portraitFile : mode === 'traits' ? !!brief.trim() && !traitPoolLoading : !!brief.trim()
 
   return (
     <Modal
@@ -255,7 +291,21 @@ export function GenerateCharacterDialog({
         <Chip on={mode === 'portrait'} onClick={() => switchMode('portrait')} disabled={busy}>
           From a portrait
         </Chip>
+        <Chip on={mode === 'card'} onClick={() => switchMode('card')} disabled={busy}>
+          From a card
+        </Chip>
+        <span className="mx-1 w-px self-stretch bg-border" />
+        <Chip on={polish} onClick={() => setPolish((v) => !v)} disabled={busy}>
+          Przetłumacz [PL]
+        </Chip>
       </div>
+      {polish && (
+        <p className="-mt-1.5 mb-3 text-[11px] text-text-muted">
+          {mode === 'card'
+            ? 'The card is translated into Polish and moved into Polish life: a Polish name, places, currency and customs, consistently in every field.'
+            : 'The character is written in Polish from the start, set in present-day Polish life.'}
+        </p>
+      )}
 
       {mode === 'traits' && (
         <div className="mb-3 space-y-2.5">
@@ -347,7 +397,32 @@ export function GenerateCharacterDialog({
         </div>
       )}
 
-      <TextAreaField
+      {mode === 'card' && (
+        <div className="mb-3">
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-border bg-bg-sunken p-3">
+            {sourceCard?.avatarDataUrl && <img src={sourceCard.avatarDataUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />}
+            <span className="text-xs text-text-muted">
+              {sourceCard ? (
+                <>
+                  <span className="block text-sm text-text">{sourceCard.card.name}</span>
+                  {sourceCard.fileName} · click to choose another
+                </>
+              ) : (
+                'Click to choose a character card (.png or .json, e.g. from Chub or SillyTavern)'
+              )}
+            </span>
+            <input type="file" accept=".png,.json,image/png,application/json" className="hidden" disabled={busy} onChange={(e) => e.target.files?.[0] && void pickCard(e.target.files[0])} />
+          </label>
+          <p className="mt-1.5 text-[11px] text-text-muted">
+            {scope === 'full'
+              ? 'The card is used as it is (translated first with [PL]); the steps below fill in life & background, gifts, wardrobe and lore around it.'
+              : 'The card is loaded into the editor as it is, or translated first with [PL].'}
+          </p>
+          {cardProgress && <p className="mt-1.5 text-xs text-accent">{cardProgress}</p>}
+        </div>
+      )}
+
+      {mode !== 'card' && <TextAreaField
         label={mode === 'portrait' ? 'Additional guidance (optional)' : mode === 'traits' ? 'Composed brief (tweak if you like)' : 'Brief'}
         rows={mode === 'portrait' ? 2 : 3}
         value={brief}
@@ -358,7 +433,7 @@ export function GenerateCharacterDialog({
             ? 'e.g. make her a bit standoffish at first'
             : 'e.g. a demon girl in a dark-fantasy world where demons are at war with dragons'
         }
-      />
+      />}
 
       {stages && (
         <ul className="mb-3 space-y-1 rounded-xl bg-bg-sunken p-3 text-xs">
@@ -397,7 +472,7 @@ export function GenerateCharacterDialog({
       )}
       </div>
       <div className="mt-4 flex shrink-0 justify-end gap-2">
-        {busy && scope === 'full' ? (
+        {busy && (scope === 'full' || mode === 'card') ? (
           <Button variant="ghost" onClick={stop}>
             Stop
           </Button>

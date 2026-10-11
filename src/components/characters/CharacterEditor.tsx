@@ -1937,8 +1937,9 @@ export function CharacterEditor({
       {showGenerate && (
         <GenerateCharacterDialog
           onClose={() => setShowGenerate(false)}
-          onGenerated={({ card, profile, bonds, outfits: draftedOutfits, characterBook }) => {
+          onGenerated={({ card, profile, bonds, outfits: draftedOutfits, characterBook, avatarDataUrl: generatedAvatar }) => {
             setForm(characterBook ? { ...card, character_book: characterBook } : card)
+            if (generatedAvatar) setAvatarDataUrl(generatedAvatar)
             if (draftedOutfits?.length) setOutfits(draftedOutfits)
             if (profile) {
               setOccupation(profile.occupation)
