@@ -1,4 +1,5 @@
 import { KoboldApiError } from './types'
+import { newId } from '@/lib/id'
 import { uint8ArrayToBase64 } from './binaryUtils'
 import type { ImageBackend, ImageGenerateParams, ImageGenerateResult } from './imageBackend'
 
@@ -67,7 +68,7 @@ export class ComfyUIClient implements ImageBackend {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal,
-        body: JSON.stringify({ prompt: workflow, client_id: crypto.randomUUID() }),
+        body: JSON.stringify({ prompt: workflow, client_id: newId() }),
       })
     } catch (e) {
       if (signal?.aborted) throw e
