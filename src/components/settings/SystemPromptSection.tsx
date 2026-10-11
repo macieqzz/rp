@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Upload, X } from 'lucide-react'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 import { BUILTIN_SYSTEM_PROMPTS, DEFAULT_SYSTEM_PROMPT } from '@/lib/prompt/systemPrompts'
+import { ASSISTANT_SYSTEM_PROMPT } from '@/lib/assistant/prompt'
 import { parseSillyTavernPreset } from '@/lib/prompt/sillyTavernPreset'
 import { Section } from '@/components/ui/Section'
 import { TextAreaField } from '@/components/ui/Field'
@@ -24,6 +25,8 @@ export function SystemPromptSection() {
   const setSystemPrompt = useSettingsStore((s) => s.setSystemPrompt)
   const postHistoryInstructions = useSettingsStore((s) => s.postHistoryInstructions)
   const setPostHistoryInstructions = useSettingsStore((s) => s.setPostHistoryInstructions)
+  const assistantSystemPrompt = useSettingsStore((s) => s.assistantSystemPrompt)
+  const setAssistantSystemPrompt = useSettingsStore((s) => s.setAssistantSystemPrompt)
   const promptPresets = useSettingsStore((s) => s.promptPresets)
   const addPromptPreset = useSettingsStore((s) => s.addPromptPreset)
   const removePromptPreset = useSettingsStore((s) => s.removePromptPreset)
@@ -194,6 +197,25 @@ export function SystemPromptSection() {
         value={postHistoryInstructions}
         onChange={(e) => setPostHistoryInstructions(e.target.value)}
         placeholder="e.g. Keep replies to two or three paragraphs. Never end on a question."
+      />
+      <TextAreaField
+        label="Assistant instruction (Assistant view only)"
+        hint="The Assistant's own instruction, separate from roleplay: it is never a character. Blank uses the built-in default shown as placeholder."
+        rows={6}
+        value={assistantSystemPrompt}
+        onChange={(e) => setAssistantSystemPrompt(e.target.value)}
+        placeholder={ASSISTANT_SYSTEM_PROMPT}
+        actions={
+          assistantSystemPrompt.trim() ? (
+            <Button variant="ghost" onClick={() => setAssistantSystemPrompt('')}>
+              Reset to default
+            </Button>
+          ) : (
+            <Button variant="ghost" onClick={() => setAssistantSystemPrompt(ASSISTANT_SYSTEM_PROMPT)}>
+              Load default to edit
+            </Button>
+          )
+        }
       />
     </Section>
   )
