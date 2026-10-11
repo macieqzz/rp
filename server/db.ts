@@ -136,6 +136,25 @@ db.exec(`
     data TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_chat_facts_chatId_createdAt ON chat_facts(chatId, createdAt);
+
+  -- Character Library: named, ordered virtual folders. Membership is an ordered characterIds
+  -- array in the JSON blob, so a playlist never owns or copies a character.
+  CREATE TABLE IF NOT EXISTS library_playlists (
+    id TEXT PRIMARY KEY,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL,
+    data TEXT NOT NULL
+  );
+
+  -- Character Library: point-in-time copies of a character's card (manual or automatic before an
+  -- edit/restore/update), restorable from the details modal's Versions tab.
+  CREATE TABLE IF NOT EXISTS character_snapshots (
+    id TEXT PRIMARY KEY,
+    characterId TEXT NOT NULL,
+    createdAt INTEGER NOT NULL,
+    data TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_character_snapshots_characterId ON character_snapshots(characterId, createdAt);
 `)
 
 type Row = Record<string, unknown>
@@ -254,6 +273,8 @@ export const objectiveStore = createStore('objectives', [
 ])
 export const relationshipEventStore = createStore('relationship_events', [{ name: 'chatId' }, { name: 'createdAt' }])
 export const chatFactStore = createStore('chat_facts', [{ name: 'chatId' }, { name: 'createdAt' }])
+export const playlistStore = createStore('library_playlists', [{ name: 'createdAt' }, { name: 'updatedAt' }])
+export const snapshotStore = createStore('character_snapshots', [{ name: 'characterId' }, { name: 'createdAt' }])
 
 export function newId(): string {
   return crypto.randomUUID()

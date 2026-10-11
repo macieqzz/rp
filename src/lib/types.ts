@@ -306,6 +306,8 @@ export interface StoredMessage extends ChatMessage {
   rawText?: string
   /** Parallel to `swipes` — each alternate reply's own pre-extraction raw output. */
   swipeRawTexts?: (string | undefined)[]
+  /** Parallel to `swipes` — each alternate reply's display-only translation (Settings → Connection → Reply translation). Never read by prompt-building; see `activeTranslation`. */
+  swipeTranslations?: (MessageTranslation | undefined)[]
   /** Suggested next lines/actions for the user, generated after this (char) message lands. */
   choices?: string[]
   /** Structured branch options that can include direct lines, actions, or gifts. */
@@ -334,6 +336,13 @@ export interface StoredMessage extends ChatMessage {
   continuityFlag?: string | null
   /** Snapshot of this message right before its most recent "Continue" appended a segment — lets the player undo it (restore this) or regenerate just that segment (re-continue from here). Cleared on a fresh generation/swipe/edit; `null` clears it. */
   continueUndo?: { text: string; rawText?: string; scene?: SceneTag } | null
+}
+
+/** A reply's display-only translation. `source` is the exact text it was made from, so an edit/continue/undo that changes the text silently retires it instead of showing a stale translation. */
+export interface MessageTranslation {
+  source: string
+  text: string
+  language: string
 }
 
 /** 10b: how a player meant a tagged line. Labels/judge behavior live in `src/lib/dating/intent.ts`. */

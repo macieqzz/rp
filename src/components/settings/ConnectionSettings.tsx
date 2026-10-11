@@ -7,6 +7,7 @@ import { BUILTIN_INSTRUCT_TEMPLATES } from '@/lib/prompt/instructTemplates'
 import { CHAT_BACKEND_LABELS, KNOWN_CHAT_PROVIDERS, NOVELAI_MODELS, type ChatBackendId } from '@/lib/api/chatBackend'
 import { TextField, SelectField } from '@/components/ui/Field'
 import { Section } from '@/components/ui/Section'
+import { Toggle } from '@/components/ui/Toggle'
 import { SettingsPage } from '@/components/ui/SettingsPage'
 import { Button } from '@/components/ui/Button'
 import { toastSuccess } from '@/lib/store/useToastStore'
@@ -28,6 +29,10 @@ export function ConnectionSettings() {
   const chatBackendApiKey = useSettingsStore((s) => s.chatBackendApiKey)
   const chatBackendModel = useSettingsStore((s) => s.chatBackendModel)
   const setChatBackendConfig = useSettingsStore((s) => s.setChatBackendConfig)
+  const translateReplies = useSettingsStore((s) => s.translateReplies)
+  const setTranslateReplies = useSettingsStore((s) => s.setTranslateReplies)
+  const translationLanguage = useSettingsStore((s) => s.translationLanguage)
+  const setTranslationLanguage = useSettingsStore((s) => s.setTranslationLanguage)
   const [draft, setDraft] = useState(baseUrl)
   const { status, model, version, maxContext, detectedTemplateId } = useConnectionStatus(baseUrl)
   // Checked once per distinct config plus on manual demand (`recheck`), not on a timer like the
@@ -266,6 +271,27 @@ export function ConnectionSettings() {
               </Button>
             </div>
           </div>
+        )}
+      </Section>
+
+      <Section
+        title="Reply translation"
+        description="After each reply finishes, asks the same model for a faithful translation and shows that instead. The model keeps seeing the original text in later prompts, and relationship scoring and expression tags still read the original. Costs one extra generation per reply."
+        surface="bare"
+      >
+        <Toggle
+          checked={translateReplies}
+          onChange={setTranslateReplies}
+          label={`Translate replies to ${translationLanguage.trim() || 'Polish'}`}
+          description="Use the language button on a message to see its original."
+        />
+        {translateReplies && (
+          <TextField
+            label="Target language"
+            value={translationLanguage}
+            onChange={(e) => setTranslationLanguage(e.target.value)}
+            placeholder="Polish"
+          />
         )}
       </Section>
     </SettingsPage>

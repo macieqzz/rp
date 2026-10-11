@@ -1,9 +1,12 @@
 import { memo, useState } from 'react'
-import { AlertCircle, ChevronLeft, ChevronRight, Compass, GitFork, Heart, History, MessageSquareWarning, RotateCcw, Star, TriangleAlert, Unlink, X } from 'lucide-react'
+import { AlertCircle, ChevronLeft, ChevronRight, Compass, GitFork, Heart, History, Languages, MessageSquareWarning, RotateCcw, Star, TriangleAlert, Unlink, Volume2, X } from 'lucide-react'
 import type { StoredMessage } from '@/lib/types'
 import { useSettingsStore, type AvatarShape } from '@/lib/store/useSettingsStore'
+import { useSpeechStore } from '@/lib/store/useSpeechStore'
+import { extractReadAloudText } from '@/lib/voice/speakableText'
 import { messageAnchorId } from '@/lib/scrollToMessage'
 import { renderMessageText } from '@/lib/text/messageText'
+import { activeTranslation } from '@/lib/text/translate'
 import type { SfxConfig } from '@/lib/text/messageSegments'
 import { confirmDialog } from '@/lib/store/useConfirmStore'
 import { intentSpec } from '@/lib/dating/intent'
@@ -87,7 +90,11 @@ export const MessageBubble = memo(function MessageBubble({
   const [steerDraft, setSteerDraft] = useState('')
 
   const isUser = message.role === 'user'
-  const displayText = isStreaming ? streamingText ?? '' : message.text
+  // Display-only translation of the current text, when one exists for it; the original stays in
+  // `message.text` (what the model and every judge read) and one click away.
+  const translation = isUser ? undefined : activeTranslation(message)
+  const [showOriginal, setShowOriginal] = useState(false)
+  const displayText = isStreaming ? streamingText ?? '' : translation && !showOriginal ? translation : message.text
   const swipes = message.swipes ?? []
   const canSwipe = !isUser && swipes.length > 0 && !isStreaming
   // Text stays empty on a failed generation — see `useChatSession.ts` — rather than persisting an
@@ -246,6 +253,32 @@ export const MessageBubble = memo(function MessageBubble({
             <ChevronRight size={14} strokeWidth={2} />
           </button>
         </span>
+      )}
+      {translation && !isStreaming && (
+        <button
+          onClick={() => setShowOriginal((v) => !v)}
+          className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-bg-sunken ${showOriginal ? 'text-accent' : 'hover:text-text'}`}
+          title={showOriginal ? 'Showing the original. Click to show the translation' : 'Translated. Click to show the original'}
+          aria-label={showOriginal ? 'Show translation' : 'Show original'}
+          aria-pressed={showOriginal}
+        >
+          <Languages size={13} strokeWidth={2} />
+        </button>
+      )}
+      {(!isStreaming || displayText.length > 0) && !isUser && (
+        <button
+          onClick={() => {
+            const textToSpeak = extractReadAloudText(displayText, useSettingsStore.getState().ttsReadMode)
+            if (textToSpeak) {
+              void useSpeechStore.getState().speak(textToSpeak)
+            }
+          }}
+          className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-bg-sunken hover:text-text"
+          title="Read aloud"
+          aria-label="Read aloud"
+        >
+          <Volume2 size={13} strokeWidth={2} />
+        </button>
       )}
       {!isStreaming && (
         <>

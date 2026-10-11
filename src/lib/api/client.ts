@@ -51,7 +51,8 @@ export function __resetUnreachableStateForTests(): void {
   unreachableToastId = null
 }
 
-async function request<T>(
+/** Exported for feature-specific API modules (e.g. `src/lib/library/api.ts`) that share this transport. */
+export async function request<T>(
   method: string,
   path: string,
   body?: unknown,
@@ -229,6 +230,8 @@ export const backupApi = {
       'objectives',
       'relationship-events',
       'chat-facts',
+      'library-playlists',
+      'library-snapshots',
     ]) {
       invalidate(resource)
     }

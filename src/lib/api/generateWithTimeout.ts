@@ -29,12 +29,14 @@ export async function generateWithTimeout(
   label: string,
   external?: AbortSignal,
   shaping?: AssistShaping,
+  /** Overrides `ASSIST_TIMEOUT_MS` for a call whose output scales with its input (reply translation). */
+  timeoutMs = ASSIST_TIMEOUT_MS,
 ): Promise<string> {
   const controller = new AbortController()
   const onExternalAbort = () => controller.abort()
   if (external?.aborted) controller.abort()
   else external?.addEventListener('abort', onExternalAbort)
-  const timer = setTimeout(() => controller.abort(), ASSIST_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     let shapedParams = params
     if (shaping?.template) {
@@ -54,7 +56,7 @@ export async function generateWithTimeout(
   } catch (e) {
     if (external?.aborted) throw e instanceof Error ? e : new Error('aborted')
     if (controller.signal.aborted) {
-      throw new Error(`${label} timed out after ${Math.round(ASSIST_TIMEOUT_MS / 1000)}s. The model backend didn't respond in time.`)
+      throw new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s. The model backend didn't respond in time.`)
     }
     throw e
   } finally {

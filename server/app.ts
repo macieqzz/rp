@@ -13,8 +13,10 @@ import {
   newId,
   objectiveStore,
   personaStore,
+  playlistStore,
   presetStore,
   relationshipEventStore,
+  snapshotStore,
   themeStore,
   worldInfoBookStore,
   worldStore,
@@ -24,6 +26,7 @@ import { removeAvatar, resolveAvatar, resolveAvatarMap, resolveAvatarMapVariants
 import { encodeTokens, tokenizerForModel } from './novelaiTokenizer.ts'
 import { originGuard } from './originCheck.ts'
 import { openMayhemRouter } from './openMayhem.ts'
+import { forgetCharacter, libraryRouter } from './library/routes.ts'
 
 /**
  * Express app: REST routes for characters, personas, chats/messages, world info books, sampler
@@ -39,6 +42,7 @@ app.use(originGuard)
 // Raised generously (a bulk sprite upload easily clears 25MB) — local-only app, no untrusted-request concern.
 app.use(express.json({ limit: '150mb' }))
 app.use('/api/openmayhem', openMayhemRouter())
+app.use('/api/library', libraryRouter())
 app.use('/avatars', express.static(avatarsDir))
 
 function notFound(res: express.Response) {
@@ -554,8 +558,10 @@ app.delete('/api/characters/:id', (req, res) => {
     }
     if (Object.keys(patch).length > 0) chatStore.update(chat.id as string, patch)
   }
-  // Removes the whole per-character folder in one shot (avatar, sprites, gallery — see avatars.ts).
+  // Removes the whole per-character folder in one shot (avatar, sprites, gallery, library media and
+  // snapshot avatars — see avatars.ts), then the library's own bookkeeping for it.
   removeAvatar('characters', characterId)
+  forgetCharacter(characterId)
   characterStore.remove(characterId)
   res.status(204).end()
 })
@@ -1088,6 +1094,24 @@ app.delete('/api/objectives/:id', (req, res) => {
   res.status(204).end()
 })
 
+
+app.post('/api/translate', async (req, res) => {
+  try {
+    const { text, targetLang } = req.body
+    if (!text || !targetLang) return res.status(400).json({ error: 'Missing text or targetLang' })
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
+    const gres = await fetch(url)
+    if (!gres.ok) return res.status(gres.status).json({ error: 'Google Translate API error' })
+    const data = await gres.json()
+    if (!Array.isArray(data) || !Array.isArray(data[0])) return res.status(500).json({ error: 'Invalid Google Translate response' })
+    const translated = data[0].map((x: unknown) => (Array.isArray(x) && typeof x[0] === 'string' ? x[0] : '')).join('')
+    res.json({ translated })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    res.status(500).json({ error: message })
+  }
+})
+
 // ---- Relationship events ----
 // Append-only audit log; no PUT/DELETE, entries are immutable once logged.
 
@@ -1137,6 +1161,8 @@ const BACKUP_STORES = {
   objectives: objectiveStore,
   relationshipEvents: relationshipEventStore,
   chatFacts: chatFactStore,
+  libraryPlaylists: playlistStore,
+  characterSnapshots: snapshotStore,
 } as const
 
 function listAvatarFiles(): { relPath: string; base64: string }[] {

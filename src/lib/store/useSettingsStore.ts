@@ -9,6 +9,7 @@ import { persist } from 'zustand/middleware'
 import type { ChatCompletionSamplerParams, GenerationParams } from '@/lib/api/types'
 import { DEFAULT_CHAT_COMPLETION_SAMPLER } from '@/lib/api/types'
 import type { TtsProviderId } from '@/lib/voice/ttsProviders'
+import type { TtsReadMode } from '@/lib/voice/speakableText'
 import type { ChatBackendId } from '@/lib/api/chatBackend'
 import type { ImageBackendId } from '@/lib/api/imageBackend'
 import type { RelationshipDifficulty } from '@/lib/dating/relationshipAssist'
@@ -308,6 +309,19 @@ interface SettingsState {
     ttsVoice: string
     ttsModel: string
   }>) => void
+  /** Speak each newly generated reply automatically (after its translation, when that's on). */
+  ttsAutoRead: boolean
+  setTtsAutoRead: (v: boolean) => void
+  /** Which part of a reply gets spoken — by auto-read and VN mode's read-aloud button alike. */
+  ttsReadMode: TtsReadMode
+  setTtsReadMode: (v: TtsReadMode) => void
+
+  // reply translation — display-only; prompts keep using the original text
+  translateReplies: boolean
+  setTranslateReplies: (v: boolean) => void
+  /** Free-text target language handed to the model, e.g. "Polish". */
+  translationLanguage: string
+  setTranslationLanguage: (v: string) => void
 
   /** Defaults to `'koboldcpp'`; the other three fields only matter for `'openai-compatible'`. */
   chatBackend: ChatBackendId
@@ -509,11 +523,11 @@ export const useSettingsStore = create<SettingsState>()(
       intimacyLevel: 'default',
       setIntimacyLevel: (v) => set({ intimacyLevel: v }),
 
-      ttsProvider: 'koboldcpp',
+      ttsProvider: 'openai-compatible',
       ttsApiKey: '',
-      ttsBaseUrl: '',
+      ttsBaseUrl: 'http://127.0.0.1:7851/v1',
       ttsRegion: '',
-      ttsVoice: '',
+      ttsVoice: 'alloy',
       ttsModel: '',
       openMayhemApiKey: '',
       setOpenMayhemApiKey: (key) => set((s) => ({ openMayhemApiKey: key,
@@ -524,6 +538,15 @@ export const useSettingsStore = create<SettingsState>()(
           || patch.ttsBaseUrl !== undefined && patch.ttsBaseUrl !== s.ttsBaseUrl
         return changesProvider ? { ttsApiKey: '', ttsVoice: '', ttsModel: '', ...patch } : patch
       }),
+      ttsAutoRead: true,
+      setTtsAutoRead: (v) => set({ ttsAutoRead: v }),
+      ttsReadMode: 'brackets',
+      setTtsReadMode: (v) => set({ ttsReadMode: v }),
+
+      translateReplies: true,
+      setTranslateReplies: (v) => set({ translateReplies: v }),
+      translationLanguage: 'Polish',
+      setTranslationLanguage: (v) => set({ translationLanguage: v }),
 
       chatBackend: 'koboldcpp',
       chatBackendBaseUrl: '',
@@ -565,6 +588,13 @@ export const useSettingsStore = create<SettingsState>()(
         return {
           ...current,
           ...p,
+          ttsProvider: p.ttsProvider || current.ttsProvider,
+          ttsBaseUrl: p.ttsBaseUrl || current.ttsBaseUrl,
+          ttsVoice: p.ttsVoice || current.ttsVoice,
+          ttsAutoRead: p.ttsAutoRead ?? current.ttsAutoRead,
+          ttsReadMode: p.ttsReadMode ?? current.ttsReadMode,
+          translateReplies: p.translateReplies ?? current.translateReplies,
+          translationLanguage: p.translationLanguage || current.translationLanguage,
           openMayhemApiKey: key,
           ...(usesOpenMayhem ? { chatBackendApiKey: key } : {}),
           themeTokensLight: { ...current.themeTokensLight, ...p.themeTokensLight },

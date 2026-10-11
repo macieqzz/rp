@@ -40,6 +40,8 @@ import { BUILTIN_INSTRUCT_TEMPLATES } from '@/lib/prompt/instructTemplates'
 import { GenerateCharacterDialog } from './GenerateCharacterDialog'
 import { TemplateGallery } from './TemplateGallery'
 import { RegenerateFieldButton } from './RegenerateFieldButton'
+import { AiStudio, AiStudioButton } from '@/components/library/AiStudio'
+import type { StudioField } from '@/lib/characters/aiStudio'
 import { LorebookEditor } from '@/components/worldinfo/LorebookEditor'
 import { getGiftCatalog } from '@/lib/dating/gifts'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
@@ -245,6 +247,7 @@ export function CharacterEditor({
   const [outreachFrequency, setOutreachFrequency] = useState<OutreachFrequency>(character?.outreach?.frequency ?? 'never')
   const [showGenerate, setShowGenerate] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [studioField, setStudioField] = useState<StudioField | null>(null)
   const [saving, setSaving] = useState(false)
   const worlds = useApiQuery('worlds', () => worldsApi.list(), []) ?? []
   const editingWorld = worlds.find((w) => w.id === worldId)
@@ -812,7 +815,12 @@ export function CharacterEditor({
             rows={4}
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
-            actions={<RegenerateFieldButton character={form} fieldKey="description" onResult={(t) => set('description', t)} />}
+            actions={
+              <span className="inline-flex items-center gap-2">
+                <RegenerateFieldButton character={form} fieldKey="description" onResult={(t) => set('description', t)} />
+                <AiStudioButton onClick={() => setStudioField('description')} />
+              </span>
+            }
           />
           <TextAreaField
             label="Personality"
@@ -823,7 +831,12 @@ export function CharacterEditor({
             rows={3}
             value={form.personality}
             onChange={(e) => set('personality', e.target.value)}
-            actions={<RegenerateFieldButton character={form} fieldKey="personality" onResult={(t) => set('personality', t)} />}
+            actions={
+              <span className="inline-flex items-center gap-2">
+                <RegenerateFieldButton character={form} fieldKey="personality" onResult={(t) => set('personality', t)} />
+                <AiStudioButton onClick={() => setStudioField('personality')} />
+              </span>
+            }
           />
           <TextAreaField
             label="Scenario"
@@ -831,13 +844,19 @@ export function CharacterEditor({
             rows={2}
             value={form.scenario}
             onChange={(e) => set('scenario', e.target.value)}
-            actions={<RegenerateFieldButton character={form} fieldKey="scenario" onResult={(t) => set('scenario', t)} />}
+            actions={
+              <span className="inline-flex items-center gap-2">
+                <RegenerateFieldButton character={form} fieldKey="scenario" onResult={(t) => set('scenario', t)} />
+                <AiStudioButton onClick={() => setStudioField('scenario')} />
+              </span>
+            }
           />
           <TextAreaField
             label="First message"
             rows={3}
             value={form.first_mes}
             onChange={(e) => set('first_mes', e.target.value)}
+            actions={<AiStudioButton onClick={() => setStudioField('first_mes')} />}
           />
           <TextAreaField
             label="Alternate greetings"
@@ -855,6 +874,7 @@ export function CharacterEditor({
             rows={4}
             value={form.mes_example}
             onChange={(e) => set('mes_example', e.target.value)}
+            actions={<AiStudioButton onClick={() => setStudioField('mes_example')} />}
           />
         </div>
       )}
@@ -1822,6 +1842,7 @@ export function CharacterEditor({
               rows={3}
               value={form.system_prompt ?? ''}
               onChange={(e) => set('system_prompt', e.target.value)}
+              actions={<AiStudioButton onClick={() => setStudioField('system_prompt')} />}
             />
             <TextAreaField
               label="Post-history instructions"
@@ -1829,6 +1850,7 @@ export function CharacterEditor({
               rows={2}
               value={form.post_history_instructions ?? ''}
               onChange={(e) => set('post_history_instructions', e.target.value)}
+              actions={<AiStudioButton onClick={() => setStudioField('post_history_instructions')} />}
             />
             <SelectField
               label="Instruct template override"
@@ -1893,7 +1915,13 @@ export function CharacterEditor({
               <TextField label="Creator" value={form.creator ?? ''} onChange={(e) => set('creator', e.target.value)} />
               <TextField label="Version" value={form.character_version ?? ''} onChange={(e) => set('character_version', e.target.value)} />
             </div>
-            <TextAreaField label="Creator notes" rows={2} value={form.creator_notes ?? ''} onChange={(e) => set('creator_notes', e.target.value)} />
+            <TextAreaField
+              label="Creator notes"
+              rows={2}
+              value={form.creator_notes ?? ''}
+              onChange={(e) => set('creator_notes', e.target.value)}
+              actions={<AiStudioButton onClick={() => setStudioField('creator_notes')} />}
+            />
           </Section>
 
           <Section title="Character lore" description="Lore that belongs to this character specifically. Travels with the card, unlike a standalone World Info book." surface="bare">
@@ -1941,6 +1969,14 @@ export function CharacterEditor({
             setForm(card)
             setShowTemplates(false)
           }}
+        />
+      )}
+      {studioField && (
+        <AiStudio
+          card={form}
+          field={studioField}
+          onApply={(text) => set(studioField, text)}
+          onClose={() => setStudioField(null)}
         />
       )}
       {showExpressionSetDialog && (
