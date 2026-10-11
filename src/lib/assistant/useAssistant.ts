@@ -24,8 +24,14 @@ import { promptTurnsOf, threadTitleFrom, type AssistantMessage, type AssistantTh
  * talking to a model. This talks to the backend and persists a thread, and nothing else.
  */
 
-/** Reserved for the reply, so the prompt never eats the whole context window. */
-const REPLY_RESERVE = 900
+/**
+ * Reserved for the reply, so the prompt never eats the whole context window. A quarter of the
+ * context, kept between 900 tokens (a small local model) and 8192 (a hosted one): a flat 900 cut a
+ * full character card off mid-sentence, while a big fixed number would starve a 4k local context.
+ */
+export function assistantReplyBudget(maxContext: number): number {
+  return Math.min(8192, Math.max(900, Math.floor(maxContext / 4)))
+}
 
 export interface AssistantProgress {
   /** What is being produced right now, for the progress line. */
@@ -111,18 +117,19 @@ export function useAssistant(threadId: string | null, onThreadsChanged?: () => v
       try {
         const template = resolveInstructTemplate(settings.instructTemplateId, customInstructTemplates)
         const maxContext = await client.getEffectiveMaxContext(settings.sampler.max_context_length)
+        const replyBudget = assistantReplyBudget(maxContext)
         const { prompt } = buildAssistantPrompt({
           turns: promptTurnsOf(withUser),
           template,
           systemPrompt: settings.assistantSystemPrompt,
           styleGuidance: settings.styleGuidance,
-          contextBudget: Math.max(512, maxContext - REPLY_RESERVE),
+          contextBudget: Math.max(512, maxContext - replyBudget),
         })
         const raw = await client.generateStream(
           {
             prompt,
             max_context_length: maxContext,
-            max_length: REPLY_RESERVE,
+            max_length: replyBudget,
             temperature: settings.sampler.temperature,
             top_p: settings.sampler.top_p,
             top_k: settings.sampler.top_k,

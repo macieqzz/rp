@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Send, Square, Trash2, UserPlus } from 'lucide-react'
-import { assistantThreadsApi } from '@/lib/api/client'
+import { assistantThreadsApi, charactersApi } from '@/lib/api/client'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
 import { useAssistant } from '@/lib/assistant/useAssistant'
 import { detectProducer, PRODUCER_DETAIL, PRODUCER_LABEL, type ProducerKind } from '@/lib/assistant/requests'
+import { ASSISTANT_COMMAND_HELP, extractJsonObject, looksLikeCard, parseAssistantCommand } from '@/lib/assistant/commands'
+import { normalizeCardJson } from '@/lib/characters/cardSpec'
 import type { AssistantMessage, AssistantThread } from '@/lib/assistant/thread'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
-import { errorMessage, toastError } from '@/lib/store/useToastStore'
+import { errorMessage, toastError, toastInfo, toastSuccess } from '@/lib/store/useToastStore'
 
 /**
  * The Assistant: a plain conversation with the model, with no character and no relationship.
@@ -194,11 +196,41 @@ export function AssistantView() {
   }
 
   /** What the composer's text looks like it's asking to have made, for the offer chip. */
-  const offered: ProducerKind | undefined = useMemo(() => detectProducer(draft), [draft])
+  const offered: ProducerKind | undefined = useMemo(() => (draft.trim().startsWith('/') ? undefined : detectProducer(draft)), [draft])
+
+  /** `/zapisz`: the newest message holding a complete character card as JSON goes to the library. */
+  const saveCardFromThread = async () => {
+    const messages = thread?.messages ?? []
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const text = messages[i].text ?? ''
+      if (!text.includes('{')) continue
+      const raw = extractJsonObject(text)
+      if (!looksLikeCard(raw)) continue
+      try {
+        const card = normalizeCardJson(raw)
+        await charactersApi.create({ card } as Parameters<typeof charactersApi.create>[0])
+        toastSuccess(`Zapisano „${card.name}” w postaciach.`)
+      } catch (e) {
+        toastError(errorMessage(e))
+      }
+      return
+    }
+    toastError('Nie znalazłem w tej rozmowie kompletnej karty postaci w JSON. Jeśli odpowiedź była ucięta, poproś o nią jeszcze raz albo użyj /postać <opis>.')
+  }
 
   const submit = async () => {
     const text = draft.trim()
     if (!text || isBusy) return
+    const command = parseAssistantCommand(text)
+    if (command) {
+      if (command.kind === 'help') {
+        toastInfo(`Komendy: ${ASSISTANT_COMMAND_HELP.join(' · ')}`)
+        return
+      }
+      setDraft('')
+      if (command.kind === 'save') return saveCardFromThread()
+      return runProducer(command.kind, command.brief)
+    }
     let id = threadId
     if (!id) {
       const created = await assistantThreadsApi.create({ title: 'New conversation', messages: [] })
@@ -210,8 +242,8 @@ export function AssistantView() {
   }
 
   /** Runs the producer on the composer's text instead of sending it as an ordinary message. */
-  const runProducer = async (kind: ProducerKind) => {
-    const text = draft.trim()
+  const runProducer = async (kind: ProducerKind, brief?: string) => {
+    const text = (brief ?? draft).trim()
     if (!text || isBusy) return
     let id = threadId
     if (!id) {
@@ -316,6 +348,13 @@ export function AssistantView() {
         {/* Composer */}
         <div className="shrink-0 border-t border-border bg-bg-elevated/60 px-6 py-4">
           <div className="mx-auto max-w-chat">
+            {draft.trim().startsWith('/') && !isBusy && (
+              <ul className="mb-2 space-y-0.5 rounded-lg border border-border bg-bg-sunken/60 px-3 py-2 text-[11px] text-text-muted">
+                {ASSISTANT_COMMAND_HELP.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            )}
             {offered && !isBusy && (
               // Offered, never assumed: sending it as an ordinary message stays one keypress away.
               <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent/5 px-3 py-2">
@@ -336,7 +375,7 @@ export function AssistantView() {
                   }
                 }}
                 rows={2}
-                placeholder="Ask anything. Shift+Enter for a new line."
+                placeholder="Ask anything. Type / for commands. Shift+Enter for a new line."
                 className="min-h-[52px] flex-1 resize-y rounded-xl border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent/60"
               />
               {isBusy ? (

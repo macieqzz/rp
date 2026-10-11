@@ -17,6 +17,17 @@ const MAKE = String.raw`(?:generate|create|make|design|build|write|draft|come up
 /** "a character", "an OC", "a companion for me" — the object of a character request. */
 const CHARACTER_OBJECT = String.raw`(?:\w+\s+){0,6}?(?:character|oc|npc|companion|persona|protagonist|villain|waifu|husbando)`
 
+/**
+ * Polish requests ("wygeneruj postać", "napisz opowiadanie"). Built with the `u` flag and letter
+ * lookarounds instead of `\b`, which treats ą/ć/ś as non-word characters and so can't bound
+ * "postać". Nouns are stems, to cover every case ending.
+ */
+const PL_MAKE = String.raw`(?<!\p{L})(?:wygeneruj|generuj|stwórz|stworz|utwórz|utworz|zrób|zrob|wymyśl|wymysl|napisz|zaprojektuj|przygotuj|wykreuj|daj mi)(?!\p{L})`
+const PL_CHARACTER = String.raw`(?<!\p{L})(?:posta[cć]|bohater|dziewczyn|kobiet|chłopak|chlopak|facet|towarzysz|kart\p{L}* postaci|npc|oc|waifu)\p{L}*`
+const PL_STORY = String.raw`(?<!\p{L})(?:opowiadani|powieś|powiesc|książk|ksiazk|fanfik|rozdział|rozdzial)\p{L}*`
+const PL_CHARACTER_PATTERN = new RegExp(String.raw`${PL_MAKE}[^.?!]{0,80}?${PL_CHARACTER}`, 'iu')
+const PL_STORY_PATTERN = new RegExp(String.raw`${PL_MAKE}[^.?!]{0,80}?${PL_STORY}`, 'iu')
+
 const CHARACTER_PATTERNS = [
   new RegExp(String.raw`\b${MAKE}\b[^.?!]{0,80}?\b${CHARACTER_OBJECT}\b`, 'i'),
   // "generate a 3000 year old white hair elf for me" — a species/archetype noun with no "character".
@@ -25,6 +36,7 @@ const CHARACTER_PATTERNS = [
     'i',
   ),
   /\b(?:character|oc) (?:card|sheet)\b/i,
+  PL_CHARACTER_PATTERN,
 ]
 
 const STORY_PATTERNS = [
@@ -36,6 +48,7 @@ const STORY_PATTERNS = [
   ),
   /\bchapter[- ]by[- ]chapter\b/i,
   /\b(?:full|complete|whole|entire|long)[- ](?:story|novel|book)\b/i,
+  PL_STORY_PATTERN,
 ]
 
 /**
@@ -52,7 +65,8 @@ export function detectProducer(text: string): ProducerKind | undefined {
   // would otherwise match a question containing the verb.
   if (
     /^(?:what|which|why|is it|are there|do you think|can you explain|tell me about)\b/i.test(trimmed) ||
-    /^how\s+(?:come|would|do|does|did|can|could|should|much|many)\b/i.test(trimmed)
+    /^how\s+(?:come|would|do|does|did|can|could|should|much|many)\b/i.test(trimmed) ||
+    /^(?:co|dlaczego|czemu|jak|jaka|jaki|jakie)(?!\p{L})/iu.test(trimmed)
   ) {
     return undefined
   }

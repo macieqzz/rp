@@ -85,3 +85,24 @@ describe('detectProducer — what it must leave alone', () => {
     expect(detectProducer('write it chapter by chapter')).toBe('story')
   })
 })
+
+describe('detectProducer (Polish)', () => {
+  it.each([
+    ['wygeneruj postać na podstawie tego szablonu', 'character'],
+    ['Stwórz mi pikantną postać: barmanka z klubu jazzowego', 'character'],
+    ['zrób dziewczynę z biura, flirciarę', 'character'],
+    ['napisz kartę postaci dla wampirzycy', 'character'],
+    ['napisz opowiadanie o Natalii w trzech rozdziałach', 'story'],
+    ['stwórz postać z ciekawą historią', 'character'],
+  ])('%s → %s', (text, kind) => {
+    expect(detectProducer(text)).toBe(kind)
+  })
+
+  it.each(['jak stworzyć dobrą postać?', 'co sprawia, że postać jest ciekawa?', 'lubię postacie z poczuciem humoru'])(
+    'leaves conversation alone: %s',
+    (text) => {
+      expect(detectProducer(text)).toBeUndefined()
+    },
+  )
+})
+
