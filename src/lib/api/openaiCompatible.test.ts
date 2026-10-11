@@ -140,7 +140,7 @@ describe('OpenAICompatibleClient — request building', () => {
   // models, and one (`nex-agi/nex-n2.5-mini:free`) reproduced exactly this — reasoning tokens
   // filled the whole `max_tokens` budget and `content` came back empty every time, with no error at
   // all, until `reasoning: {enabled: false}` was added to the request.
-  describe('reasoning — OpenRouter only', () => {
+  describe('reasoning — OpenRouter-dialect hosts only', () => {
     it("requests reasoning off by default, since a hidden 'thinking' phase only costs reply budget in a roleplay app", async () => {
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { choices: [{ message: { content: 'hi' } }] }))
       vi.stubGlobal('fetch', fetchMock)
@@ -176,6 +176,16 @@ describe('OpenAICompatibleClient — request building', () => {
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { choices: [{ message: { content: 'hi' } }] }))
       vi.stubGlobal('fetch', fetchMock)
       const client = new OpenAICompatibleClient('https://openrouter.ai/api/v1/', '', 'some/model:free')
+
+      await client.generate(BASE_REQUEST)
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+      expect(body.reasoning).toEqual({ enabled: false })
+    })
+
+    it('requests reasoning off for the Nous Portal inference API too, which speaks the same dialect', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { choices: [{ message: { content: 'hi' } }] }))
+      vi.stubGlobal('fetch', fetchMock)
+      const client = new OpenAICompatibleClient('https://inference-api.nousresearch.com/v1', '', 'deepseek/deepseek-v4-pro')
 
       await client.generate(BASE_REQUEST)
       const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)

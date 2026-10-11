@@ -14,13 +14,15 @@ import { isOpenMayhem, loadOpenMayhemModels, OPENMAYHEM_PROXY, openMayhemRequest
  * indistinguishable from the model just declining to answer.
  *
  * `reasoning` is OpenRouter's own unified control (not a standard OpenAI Chat Completions field),
- * so it's only sent to OpenRouter itself — an arbitrary extra top-level field is usually harmless
- * against another provider's endpoint, but there's no upside to sending a directive that only one
- * provider defined.
+ * so it's only sent to hosts known to speak it: OpenRouter itself, and the Nous Portal inference
+ * API, which mirrors OpenRouter's wire format and reasons by default on most of its catalog
+ * (live-verified: `reasoning: {enabled: false}` turns it off there). An arbitrary extra top-level
+ * field is usually harmless against another provider's endpoint, but there's no upside to sending
+ * a directive that provider never defined.
  */
-function isOpenRouter(baseUrl: string): boolean {
+function speaksOpenRouterReasoning(baseUrl: string): boolean {
   try {
-    return /(^|\.)openrouter\.ai$/.test(new URL(baseUrl.trim()).hostname)
+    return /(^|\.)(openrouter\.ai|nousresearch\.com)$/.test(new URL(baseUrl.trim()).hostname)
   } catch {
     return false
   }
@@ -91,11 +93,11 @@ export class OpenAICompatibleClient implements ChatBackend {
     if (typeof params.frequency_penalty === 'number') body.frequency_penalty = params.frequency_penalty
     if (params.reasoning_effort) body.reasoning_effort = params.reasoning_effort
     if (params.verbosity) body.verbosity = params.verbosity
-    // See `isOpenRouter`'s doc comment. An explicit effort still wins (translated into OpenRouter's
-    // own shape alongside the OpenAI-style field above, so either convention reaches the model);
-    // "Auto" — no explicit choice made — means "off" here, not "let the provider pick its own
+    // See `speaksOpenRouterReasoning`'s doc comment. An explicit effort still wins (translated into
+    // OpenRouter's own shape alongside the OpenAI-style field above, so either convention reaches the
+    // model); "Auto" — no explicit choice made — means "off" here, not "let the provider pick its own
     // default", because that default is what was silently eating the whole reply budget.
-    if (isOpenRouter(this.baseUrl)) {
+    if (speaksOpenRouterReasoning(this.baseUrl)) {
       body.reasoning = params.reasoning_effort ? { effort: params.reasoning_effort } : { enabled: false }
     }
     // See `usesMaxCompletionTokens`'s doc comment — starts as the widely-supported `max_tokens`;
