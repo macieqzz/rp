@@ -11,8 +11,7 @@ import {
   normalizeWyvernSearch,
   proxiedImage,
   resolveProviderUrl,
-  toCardData,
-} from './providers.ts'
+  toCardData, chubSortFor } from './providers.ts'
 
 // providers.ts only needs media.ts for network calls; mocking it (vi.mock is hoisted above the
 // imports) keeps the DB module and any network out of these pure parsing tests.
@@ -109,6 +108,11 @@ describe('Chub normalization', () => {
       createdAt: Date.parse('2025-03-01T12:00:00Z'),
       updatedAt: Date.parse('2025-06-02T08:30:00Z'),
     })
+  })
+
+  it('reports no more pages once the total is covered, cursor or not', () => {
+    const lastPage = { data: { count: 5, cursor: 'abc', nodes: sample.data.nodes } }
+    expect(normalizeChubSearch(lastPage, 1).hasMore).toBe(false)
   })
 
   it('reports no more pages without a cursor', () => {
@@ -343,5 +347,19 @@ describe('card helpers', () => {
     ])
     expect(extractPngCard(png)).toEqual({ data: { name: 'Ünïcode V3' } })
     expect(extractPngCard(Buffer.from('not a png'))).toBeUndefined()
+  })
+})
+
+describe('chubSortFor', () => {
+  const base = { query: '', tags: [] as string[], creator: '' }
+  it('keeps trending for plain browsing', () => {
+    expect(chubSortFor({ ...base, sort: 'popular' })).toBe('trending')
+  })
+  it('switches popular to all-time downloads once there is a search, tag or creator', () => {
+    expect(chubSortFor({ ...base, sort: 'popular', query: 'barmaid' })).toBe('download_count')
+    expect(chubSortFor({ ...base, sort: 'popular', tags: ['romance'] })).toBe('download_count')
+  })
+  it('leaves explicit sorts alone', () => {
+    expect(chubSortFor({ ...base, sort: 'newest', query: 'barmaid' })).toBe('id')
   })
 })

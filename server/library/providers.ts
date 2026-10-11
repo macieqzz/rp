@@ -400,7 +400,19 @@ export function normalizeChubSearch(data: unknown, page: number): OnlineSearchRe
     .filter((i): i is OnlineCharacterSummary => !!i)
   const cursor = root.cursor ?? obj(root.data).cursor
   const total = num(root.count) ?? num(obj(root.data).count)
-  return { items, page, hasMore: cursor != null && items.length > 0, total }
+  // Chub sends a cursor even on the last page, so the reported total decides when it reports one.
+  const more = items.length > 0 && (total != null ? page * PAGE_SIZE.chub < total : cursor != null)
+  return { items, page, hasMore: more, total }
+}
+
+/**
+ * Chub's `trending` only covers what's hot right now, so as the sort for a typed search or tag
+ * filter it finds next to nothing ("barmaid": 0 trending vs 5 by downloads). "Popular" means
+ * trending only while just browsing, and all-time downloads once there's something to match.
+ */
+export function chubSortFor(q: Pick<SearchQuery, 'sort' | 'query' | 'tags' | 'creator'>): string {
+  if (q.sort === 'popular' && (q.query || q.tags.length || q.creator)) return CHUB_SORT.downloads
+  return CHUB_SORT[q.sort]
 }
 
 async function chubSearch(q: SearchQuery): Promise<OnlineSearchResult> {
@@ -412,7 +424,7 @@ async function chubSearch(q: SearchQuery): Promise<OnlineSearchResult> {
     include_forks: 'true',
     venus: 'false',
     min_tokens: '50',
-    sort: CHUB_SORT[q.sort],
+    sort: chubSortFor(q),
   })
   if (q.query) params.set('search', q.query)
   if (q.creator) params.set('username', q.creator)
