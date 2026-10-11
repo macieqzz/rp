@@ -306,6 +306,9 @@ interface SettingsState {
   ttsRegion: string
   ttsVoice: string
   ttsModel: string
+  /** Read each new character reply aloud as soon as it finishes, in both the chat view and VN mode. */
+  ttsAutoVoice: boolean
+  setTtsAutoVoice: (v: boolean) => void
   /** Shared by OpenMayhem chat, images and speech; never used for another provider. */
   openMayhemApiKey: string
   setOpenMayhemApiKey: (key: string) => void
@@ -530,6 +533,8 @@ export const useSettingsStore = create<SettingsState>()(
       ttsRegion: '',
       ttsVoice: '',
       ttsModel: '',
+      ttsAutoVoice: false,
+      setTtsAutoVoice: (v) => set({ ttsAutoVoice: v }),
       openMayhemApiKey: '',
       setOpenMayhemApiKey: (key) => set((s) => ({ openMayhemApiKey: key,
         ...(s.chatBackend === 'openai-compatible' && isOpenMayhem(s.chatBackendBaseUrl) ? { chatBackendApiKey: key } : {}),

@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { AlertCircle, ChevronLeft, ChevronRight, Compass, GitFork, Heart, History, MessageSquareWarning, RotateCcw, Star, TriangleAlert, Unlink, X } from 'lucide-react'
+import { AlertCircle, ChevronLeft, ChevronRight, Compass, GitFork, Heart, History, Loader2, MessageSquareWarning, RotateCcw, Star, TriangleAlert, Unlink, Volume1, Volume2, X } from 'lucide-react'
 import type { StoredMessage } from '@/lib/types'
 import { useSettingsStore, type AvatarShape } from '@/lib/store/useSettingsStore'
 import { messageAnchorId } from '@/lib/scrollToMessage'
@@ -7,6 +7,8 @@ import { renderMessageText } from '@/lib/text/messageText'
 import type { SfxConfig } from '@/lib/text/messageSegments'
 import { confirmDialog } from '@/lib/store/useConfirmStore'
 import { intentSpec } from '@/lib/dating/intent'
+import type { Character } from '@/lib/characters/cardSpec'
+import { useSpeechPlayer } from '@/lib/voice/speechPlayer'
 
 function avatarClass(shape: AvatarShape): string {
   switch (shape) {
@@ -39,6 +41,8 @@ interface MessageBubbleProps {
   isHighlighted?: boolean
   /** SFX-burst policy for this message's speaker (global toggle + their `sfxWords`). */
   sfx?: SfxConfig
+  /** The speaking character's own voice override, for the read-aloud button. */
+  voice?: Character['voice']
   // Every callback below takes this message's own id as its first argument, rather than
   // `MessageLog` pre-binding a fresh `() => onX(m.id)` closure per message per render — the whole
   // point of wrapping this component in `memo` below is to skip re-rendering a bubble whose props
@@ -63,6 +67,7 @@ export const MessageBubble = memo(function MessageBubble({
   streamingText,
   isHighlighted,
   sfx,
+  voice,
   onEdit,
   onDelete,
   onRewind,
@@ -78,6 +83,9 @@ export const MessageBubble = memo(function MessageBubble({
   const showTokenCounts = useSettingsStore((s) => s.showTokenCounts)
   const clickToEdit = useSettingsStore((s) => s.clickToEdit)
   const regexScripts = useSettingsStore((s) => s.regexScripts)
+
+  // A primitive per bubble, so a line starting or stopping elsewhere doesn't re-render this one.
+  const speechStatus = useSpeechPlayer((s) => (s.messageId === message.id ? s.status : 'idle'))
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.text)
@@ -107,6 +115,12 @@ export const MessageBubble = memo(function MessageBubble({
   // `dating/continuityGuard.ts`. This one has usually already earned an automatic retry; the badge
   // is what's left when the retry was spent or the second attempt broke continuity too.
   const showContinuityFlag = !isUser && !!message.continuityFlag && !isStreaming
+  const canSpeak = !isUser && !isStreaming && !message.failed && !!message.text.trim()
+  const toggleSpeech = () => {
+    const player = useSpeechPlayer.getState()
+    if (speechStatus !== 'idle') player.stop()
+    else void player.speak(message.id, message.text, voice)
+  }
 
   const startEdit = () => {
     if (!clickToEdit || isStreaming) return
@@ -249,6 +263,22 @@ export const MessageBubble = memo(function MessageBubble({
       )}
       {!isStreaming && (
         <>
+          {canSpeak && (
+            <button
+              onClick={toggleSpeech}
+              className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-bg-sunken ${speechStatus !== 'idle' ? 'text-accent' : 'hover:text-text'}`}
+              title={speechStatus === 'idle' ? 'Read aloud' : speechStatus === 'loading' ? 'Loading…' : 'Stop'}
+              aria-label={speechStatus === 'idle' ? 'Read this message aloud' : 'Stop reading aloud'}
+            >
+              {speechStatus === 'loading' ? (
+                <Loader2 size={13} strokeWidth={2} className="animate-spin" />
+              ) : speechStatus === 'playing' ? (
+                <Volume2 size={13} strokeWidth={2} />
+              ) : (
+                <Volume1 size={13} strokeWidth={2} />
+              )}
+            </button>
+          )}
           <button
             onClick={() => onTogglePin(message.id)}
             className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-bg-sunken ${message.pinned ? 'text-accent' : 'hover:text-text'}`}

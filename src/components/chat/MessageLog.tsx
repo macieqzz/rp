@@ -67,7 +67,9 @@ export function MessageLog({
                 ? character?.avatarDataUrl
                 : (participantCharacters.find((c) => c.id === m.speakerId)?.avatarDataUrl ?? character?.avatarDataUrl)
           const sfx = sfxConfigFor(m, { enabled: sfxEnabled, globalWords: globalSfxWords, primary: character, participants: participantCharacters })
-          return [m.id, { avatarDataUrl, sfx }]
+          const speaker = m.role !== 'char' ? undefined : m.speakerId ? participantCharacters.find((c) => c.id === m.speakerId) ?? character : character
+          const voice = speaker?.voice
+          return [m.id, { avatarDataUrl, sfx, voice }]
         }),
       ),
     [messages, persona, character, participantCharacters, sfxEnabled, globalSfxWords],
@@ -81,6 +83,7 @@ export function MessageLog({
           message={m}
           avatarDataUrl={perMessage.get(m.id)?.avatarDataUrl}
           sfx={perMessage.get(m.id)?.sfx}
+          voice={perMessage.get(m.id)?.voice}
           isStreaming={generatingMessageId === m.id}
           // Only the bubble actually streaming needs the live text — handing every other bubble
           // the same ever-changing string would force all of them to re-render on every token

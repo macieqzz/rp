@@ -607,7 +607,8 @@ export function VNStage({
   // Swiping to a different line, or leaving the message entirely, cuts off whatever was playing —
   // it no longer matches what's on screen.
   useEffect(() => stopSpeaking, [lastCharMsg?.id, activeSwipe, ttsProvider, ttsModel, ttsVoice, openMayhemApiKey, ttsApiKey, ttsBaseUrl, ttsRegion, character?.voice?.provider, character?.voice?.voiceId])
-  const [autoVoice, setAutoVoice] = useState(false)
+  const autoVoice = useSettingsStore((s) => s.ttsAutoVoice)
+  const setTtsAutoVoice = useSettingsStore((s) => s.setTtsAutoVoice)
 
   // Every message id this component instance has watched stream in live — its text already
   // appeared token-by-token, so re-running the typewriter over it (e.g. once `isStreamingThis`
@@ -629,11 +630,12 @@ export function VNStage({
   // placeholder or a still-in-flight stream.
   const dialogueComplete = !isStreamingThis && !!lastCharMsg?.text && !lastCharMsg?.failed && dialogueRevealDone
   // Auto-voice: speaks each new reply once it finishes typing, unprompted — opt-in, off by
-  // default, never persisted (resets with everything else on a chat switch, same as Auto-advance).
-  // Unlike Auto-advance this can't chain into extra generations on its own: it only ever narrates a
-  // reply that already happened, so it carries none of Auto-advance's runaway-cost risk and needs
-  // none of its safety caps.
-  const autoVoiceSpokenIdRef = useRef<string | null>(null)
+  // default, and remembered (shared with the chat view's toggle). Unlike Auto-advance this can't
+  // chain into extra generations on its own: it only ever narrates a reply that already happened,
+  // so it carries none of Auto-advance's runaway-cost risk and needs none of its safety caps.
+  // Seeded with the line already on screen, so opening a chat with it on doesn't read old text;
+  // switching it on by hand clears the seed, so that click reads the current line right away.
+  const autoVoiceSpokenIdRef = useRef<string | null>(lastCharMsg?.id ?? null)
   useEffect(() => {
     if (!autoVoice || !dialogueComplete || !lastCharMsg) return
     if (autoVoiceSpokenIdRef.current === lastCharMsg.id) return
@@ -743,7 +745,10 @@ export function VNStage({
               )}
             </button>
             <button
-              onClick={() => setAutoVoice((v) => !v)}
+              onClick={() => {
+                if (!autoVoice) autoVoiceSpokenIdRef.current = null
+                setTtsAutoVoice(!autoVoice)
+              }}
               title={autoVoice ? 'Auto-voice: on. Reads each new reply aloud' : 'Auto-voice: read each new reply aloud automatically'}
               aria-label={autoVoice ? 'Auto-voice: on' : 'Auto-voice: off'}
               aria-pressed={autoVoice}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
+  AudioLines,
   Backpack,
   CalendarDays,
   CalendarHeart,
@@ -26,6 +27,7 @@ import { charactersApi, chatsApi } from '@/lib/api/client'
 import { IconButton } from '@/components/ui/IconButton'
 import { useSettingsStore } from '@/lib/store/useSettingsStore'
 import { scrollToMessage } from '@/lib/scrollToMessage'
+import { useSpeechPlayer } from '@/lib/voice/speechPlayer'
 import { buildChatTranscriptHtml, chatTranscriptFilename, downloadChatTranscript } from '@/lib/export/chatTranscript'
 import { parseSfxWordList } from '@/lib/text/messageSegments'
 import { useBgmSceneStore } from '@/lib/store/useBgmSceneStore'
@@ -314,6 +316,24 @@ export function ChatWindow({
   // Computed here, above the early return below, because the effect that publishes it is a hook.
   const vnModeSetting = chat?.assistOverrides?.visualNovelMode ?? globalVisualNovelMode
   const resolvedVisualNovelMode = !!chat && (vnModeSetting === 'auto' ? isVnReady(character, world) : vnModeSetting)
+
+  // Auto-voice for the chat view (VN mode runs its own, timed to the typewriter): reads a reply
+  // aloud the moment its generation finishes, never one that was already there when the chat
+  // opened. Leaving the chat, or switching to VN, cuts off whatever is still playing.
+  const ttsAutoVoice = useSettingsStore((s) => s.ttsAutoVoice)
+  const setTtsAutoVoice = useSettingsStore((s) => s.setTtsAutoVoice)
+  const prevGeneratingIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    const finishedId = prevGeneratingIdRef.current
+    prevGeneratingIdRef.current = generatingMessageId
+    if (generatingMessageId || !finishedId || !ttsAutoVoice || resolvedVisualNovelMode) return
+    const reply = messages.find((m) => m.id === finishedId)
+    if (!reply || reply.role !== 'char' || reply.failed || !reply.text.trim()) return
+    const speaker = reply.speakerId ? participantCharacters.find((c) => c.id === reply.speakerId) ?? character : character
+    void useSpeechPlayer.getState().speak(reply.id, reply.text, speaker?.voice)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generatingMessageId])
+  useEffect(() => () => useSpeechPlayer.getState().stop(), [chatId, resolvedVisualNovelMode])
   // Panels opened over the stage wear its glass rather than the app's own surface — see
   // `useVnChromeStore`. Cleared on unmount so leaving the chat can't strand a dialog in VN dress.
   const setVnChrome = useVnChromeStore((s) => s.setActive)
@@ -395,6 +415,19 @@ export function ChatWindow({
       priority: 'primary',
       active: showTuning,
       onClick: () => setShowTuning((v) => !v),
+    },
+    {
+      key: 'auto-voice',
+      icon: AudioLines,
+      label: ttsAutoVoice ? 'Auto-voice: on (reads each new reply aloud)' : 'Auto-voice: off (read each new reply aloud automatically)',
+      priority: 'primary',
+      active: ttsAutoVoice,
+      // VN mode has its own Auto-voice button by the dialogue box, bound to the same setting.
+      hidden: resolvedVisualNovelMode,
+      onClick: () => {
+        if (ttsAutoVoice) useSpeechPlayer.getState().stop()
+        setTtsAutoVoice(!ttsAutoVoice)
+      },
     },
     {
       key: 'vn-mode',
